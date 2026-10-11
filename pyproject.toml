@@ -1,0 +1,95 @@
+[project]
+name = "causalrank"
+dynamic = ["version"]
+description = "Multi-treatment causal outcome estimation (GBM propensity + Hajek IPTW) with diagnostics and rank-ready inference scaffolding."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "CausalRank contributors" }]
+keywords = [
+  "causal-inference",
+  "propensity-score",
+  "iptw",
+  "multi-treatment",
+  "ranking",
+  "bootstrap",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Information Analysis",
+  "Typing :: Typed",
+]
+dependencies = [
+  "numpy>=1.26",
+  "pandas>=2.0",
+  "scipy>=1.11",
+  "scikit-learn>=1.4",
+]
+
+[project.urls]
+Documentation = "https://github.com/causalrank/causalrank/tree/main/docs"
+
+[dependency-groups]
+dev = [
+  "pytest>=8.0",
+  "hypothesis>=6.100",
+  "ruff>=0.6",
+  "mypy>=1.11",
+  "nbconvert>=7.16",
+  "nbclient>=0.8",
+  "ipykernel>=6.29",
+  "build>=1.2",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/causalrank/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/causalrank"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "tests", "docs", "examples", "README.md", "LICENSE", "PROJECT_SPEC.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+markers = [
+  "slow: multi-replication simulation checks (kept small enough for CI)",
+  "research: full research benchmarks, run manually",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM", "NPY", "RUF"]
+ignore = [
+  "E501",    # line length is handled by the formatter budget; long messages stay readable
+  "RUF002",  # docs contain Chinese punctuation by design
+  "RUF003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E731", "B011"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src/causalrank"]
+ignore_missing_imports = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+show_error_codes = true

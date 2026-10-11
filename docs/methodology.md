@@ -1,0 +1,167 @@
+# CausalRank 方法说明（Phase 1）
+
+> 对应实现：`src/causalrank/{estimators,diagnostics,validation,simulation}`。
+> 本文给出**估计目标、公式、适用条件、假设与数值边界**；仅“跑通”不构成正确性依据。
+
+## 1. 估计目标（estimand）
+
+对 Treatment `a = 1..K`：
+
+$$\mu_a = E_{\mathcal P}[Y(a)]$$
+
+- $Y(a)$：接受 Treatment `a` 时的潜在结果（v0.1 为二元 0/1）；
+- $\mathcal P$：输入样本所代表的**样本总体**（ATE/平均潜在结果目标，`estimand="population_mean"`）；
+- 关键点：**所有 Treatment 的 $\mu_a$ 都在同一目标总体上定义**，因此点估计之间的比较是可比的。
+  各 Treatment 独立计算“相对各自对照组的 uplift”会得到不可比的目标，本项目不这样做。
+
+结果 $Y$ 的定义与观察窗口必须在数据中保持一致；一致性（consistency）由使用者保证。
+
+## 2. 倾向得分：多分类 GBM（预测模型，不是因果方法）
+
+$$e_a(x) = P(T = a \mid X = x), \qquad \sum_{a=1}^K e_a(x) = 1.$$
+
+**模型选择**：sklearn `HistGradientBoostingClassifier`（联合多分类概率模型，非 one-vs-rest）。
+与 McCaffrey et al. (2013) 中广义提升模型可能采用的一对其余构造不同，这里明确采用
+**单一联合多分类模型**；两者不必相同，本文实现与该文不宣称完全一致。
+
+**预处理管线**（全部在 `sklearn.Pipeline` 内，杜绝泄露）：
+
+| 变量 | 处理 |
+|---|---|
+| 数值 | `SimpleImputer(strategy="median"\|"mean"\|"constant")`（训练折内 fit） |
+| 类别 | `SimpleImputer(strategy="most_frequent"\|"constant")` + `OneHotEncoder(handle_unknown="ignore", sparse_output=False)` |
+
+规则：
+- 插补器、编码器、GBM 只在**训练折 / Bootstrap 重抽样**内 fit，绝不在整份样本上预 fit；
+- `predict_proba` 输出列按 `model.classes_` 显式映射回**公开标签规范序**（排序后的唯一标签），
+  实现见 `align_proba_columns()`；禁止假设列位置；
+- 严禁用 `decision_function` 或未归一化的分数当概率。
+
+**GBM 默认超参**（`config.py::default_gbm_params`，可经 `gbm_params` 覆盖）：
+
+```
+max_iter=400, learning_rate=0.02, max_depth=4, min_samples_leaf=60, l2_regularization=2.0
+```
+
+选择依据（在已知真值倾向面的合成 DGP 上调参，见 §7）：深度/低叶节点的树会追逐标签噪声、
+给出过度自信的概率。这有两个后果：(a) 样本内拟合的 $\hat e_{T_i}$ 系统性偏大；
+(b) out-of-fold 的 $\hat e_{T_i}$ 偶发极小值 → 权重爆炸。适度正则后倾向误差显著下降
+（实验中 MAE 由 0.106 降至 0.059），OOF 权重 ESS 比由 ~0.10 回升至 ~0.60。
+**AUC / 准确率不作为因果有效性的证据**，本包不将其作为质量指标输出。
+
+**Out-of-fold（`cross_fit=m`）**：`StratifiedKFold(m, shuffle=True, random_state=...)`，
+每折训练集必须包含全部 K 类（样本量不足时训练前报错）。OOF 倾向得分用于计算权重，
+降低“同一份数据拟合与评估”的过拟合偏差；全样本拟合模型的用途仅限于描述与复用。
+局限：OOF 倾向得分噪声更大，有限样本下方差可能上升；这是偏差—方差权衡，不是免费午餐。
+
+**概率裁剪（`clip_propensity=eps`，默认关闭）**：
+- 只对**实际 Treatment 概率** $e_{T_i}$ 做**下界**裁剪 $e \leftarrow \max(e, \varepsilon)$
+  （$e\to 1$ 时权重 $1/e$ 有界，无需上界裁剪）；
+- 裁剪比例随结果输出（`propensity_clipped` 警告）；
+- 裁剪会改变有限样本偏差与权重含义，不能默默执行；
+- 概率恰为 0 是 positivity 违背，直接报错，不被裁剪掩盖。
+
+## 3. IPTW：Hájek 形式（主估计器）
+
+权重与估计量：
+
+$$w_i = \frac{1}{\hat e_{T_i}(X_i)}, \qquad
+\hat\mu_a^{H} = \frac{\sum_{i=1}^n 1\{T_i=a\}\, w_i Y_i}{\sum_{i=1}^n 1\{T_i=a\}\, w_i}.$$
+
+性质与边界：
+- 二元 outcome 下组内正权重平均必落在 $[0,1]$；
+- 对组内权重乘同一常数不变（测试覆盖）；
+- 相较 HT 形式，有限样本通常更稳定（不依赖 $n$ 与权重整体尺度的匹配）；
+- **不保证**无偏或平衡：偏差由倾向估计误差与识别假设共同决定。
+
+内部核对用 Horvitz–Thompson 形式（不对外暴露）：
+
+$$\hat\mu_a^{HT} = \frac1n \sum_{i=1}^n 1\{T_i=a\}\frac{Y_i}{\hat e_a(X_i)}.$$
+
+**禁止**的混合算法：用组内归一化权重却在公式中除以整体 $n$。实现中 HT 与 Hájek
+是两个独立函数（`horvitz_thompson_estimate` / `hajek_estimate`），测试分别手算核对。
+
+## 4. 诊断定义
+
+### 4.1 权重与有效样本量
+
+$$\mathrm{ESS}_a = \frac{\left(\sum_i w_{ia}\right)^2}{\sum_i w_{ia}^2}, \qquad w_{ia} = 1\{T_i=a\} w_i .$$
+
+输出：组内 $n_a$、权重和、ESS、ESS 比（$\mathrm{ESS}_a/n_a$）、权重分位数
+（min / 1% / 5% / 50% / 95% / 99% / max，可配置）、最大单条权重占组内权重和的比例。
+
+### 4.2 Overlap（共同支持的经验诊断）
+
+对每个 Treatment `a` 输出：
+- $e_a(X)$ 在**全部样本**上的分位数（该臂在协变量空间中的可达范围，positivity 需要它为正）；
+- $e_{T_i}(X_i)$ 在被分配到 `a` 的行上的分位数（IPTW 权重分母）；
+- $e_{T_i}(X_i) < $ `min_propensity_warn` 的比例；
+- 全局：$\max_a e_a(X)$ 接近 1 的行占比（近确定性分配）。
+
+### 4.3 标准化均值差 SMD
+
+- **项（term）**：数值协变量本身；类别协变量按每个 level 的 0/1 指示变量；
+  任何含缺失值的特征额外增加 `__missing__` 指示项（缺失模式也要平衡）。
+- 对每个无序 Treatment 对 $(a,b)$：
+
+$$\mathrm{SMD}_{ab} = \frac{m_a - m_b}{s_{\mathrm{ref}}}, \qquad
+s_{\mathrm{ref}} = \sqrt{\frac{s_a^2 + s_b^2}{2}}$$
+
+  - $m_g$：未加权（`smd_unweighted`）或 Hájek 加权组内均值
+    $m_a^w = \sum_{T_i=a} w_i x_i / \sum_{T_i=a} w_i$；
+  - $s_g$：组内**未加权**样本标准差（ddof=1，缺失项逐项剔除）。
+    分母使用与权重无关的 pooled reference SD（Austin 2009 建议）：若用加权 SD，
+    极端权重会缩小分母以外的差异，从而掩盖失衡。
+- 汇报：每个项在所有 pair 上的 `max|SMD|`（加权/未加权）、超过 0.1 / 0.25 的 pair 数。
+- 边界：$s_{\mathrm{ref}}=0$ 且均值差为 0 → SMD=0；$s_{\mathrm{ref}}=0$ 且均值差非 0 → $\pm\infty$
+  并触发 `degenerate_smd`；有效观测数 < 2 → SMD=NaN。
+
+**解释限制**：`max|SMD| <= 0.1` 只是筛查惯例，不是充分条件；弱混杂变量平衡不能掩盖
+未测量强混杂的存在。加权后 SMD 变差（> 未加权）是模型失配/极端权重的信号，应如实报告。
+
+### 4.4 质量门控
+
+`quality_gate = pass | caution | fail`：`info` 不降级，`warning` → `caution`，
+`critical` → `fail`。警告码：`small_group`、`rare_treatment`、`low_propensity`、
+`extreme_weight`、`low_ess`、`residual_imbalance`、`severe_imbalance`、`duplicate_rows`、
+`high_cardinality_categorical`、`missing_covariates`、`propensity_clipped`、
+`degenerate_smd`、`label_dtype_cast`。门控只陈述经验诊断结果，
+**不会**输出“可靠因果排序”类结论。
+
+## 5. 数值与工程边界
+
+| 情形 | 行为 |
+|---|---|
+| $e_{T_i}=0$ | 报错（positivity 违背），不静默处理 |
+| 倾向非有限 / 行和≠1 | 报错（`CausalRankError`） |
+| 某臂观测数 < 2 | 报错 |
+| 某臂观测数 < `min_group_n` | 警告 `small_group` |
+| `cross_fit` > 最小组样本数 | 训练前报错 |
+| outcome 非 0/1 / 含缺失 | 报错 |
+| treatment 含缺失 / 单类 | 报错 |
+| 标签混合类型 / bool | 报错；整数浮点标签显式转换为 int 并记 info |
+| 协变量 dtype 不支持（日期等） | 报错并提示转换方式 |
+| 重复行 | 警告 `duplicate_rows`（iid 假设提示） |
+
+## 6. 本版本**不**提供（Phase 2/3 及以后）
+
+- 联合 Bootstrap 协方差 $\hat\Sigma$、标准误、单项 CI（Phase 2）；
+- Bonferroni 同时差值区间、排名置信集（Phase 3）；
+- AIPW / double robustness、Overlap Weighting（不同的目标总体！）、PSM、DML；
+- 灵敏度分析（未观测混杂）、cluster bootstrap、max-T/stepdown 排名推断。
+
+`result.se / ci_low / ci_high` 为 `NaN`，`result.covariance / pairwise / ranks` 为 `None`，
+`result.inference_available = False`——不是遗漏，是刻意的阶段边界。
+
+## 7. 验证方法（为什么可信）
+
+1. **手算例**：2 Treatment × 4 样本的 Hájek 与 HT 结果与实现逐位吻合（`tests/test_iptw.py`）；
+2. **不变性**（Hypothesis）：组内权重缩放不变、行置换不变、列对齐映射正确；
+3. **Oracle 对照**：在已知真值 $e_a(x)$ 的 DGP 上，IPTW 权重使加权 SMD 随 $n$ 下降、
+   $\hat\mu_a \to \mu_a$；
+4. **重复实验**：`tests/test_benchmark.py` 与 `scripts/run_simulation.py` 在多种子、
+   多样本量下比较 Bias/RMSE（调整前 vs 调整后），偏差随 $n$ 收敛；
+5. **诊断有效性**：弱重叠/强混杂场景触发对应警告与门控降级，而非误报“可靠”。
+
+Monte Carlo 误差按 $\sqrt{\hat p(1-\hat p)/R}$ 报告；有限模拟中 0.946 与 0.95 的差别
+不构成“方法失效”的证据。

@@ -1,0 +1,248 @@
+"""Result containers returned by :class:`causalrank.api.CausalRank`.
+
+Design rules (PROJECT_SPEC.md sections 2.3, 3.7, 8):
+
+* numeric API must not depend on any plotting library;
+* Phase 1 computes **estimates and diagnostics only**; uncertainty fields are
+  present in the schema but explicitly null and flagged
+  ``inference_available=False`` — they are filled by the Phase 2 joint
+  bootstrap and Phase 3 rank inference;
+* every warning is a structured record (code / level / message / details)
+  instead of a bare printed string, so quality gates are machine-checkable.
+"""
+
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass, field
+from typing import Any, Literal
+
+import numpy as np
+import pandas as pd
+
+WarningLevel = Literal["info", "warning", "critical"]
+
+#: Global quality gate derived from the emitted warnings.
+GateLevel = Literal["pass", "caution", "fail"]
+
+_LEVEL_ORDER: dict[str, int] = {"info": 0, "warning": 1, "critical": 2}
+
+
+@dataclass(frozen=True)
+class DiagnosticWarning:
+    """One structured diagnostic / quality-gate finding."""
+
+    code: str
+    level: WarningLevel
+    message: str
+    details: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "code": self.code,
+            "level": self.level,
+            "message": self.message,
+            "details": dict(self.details),
+        }
+
+    def __str__(self) -> str:  # pragma: no cover - convenience only
+        return f"[{self.level.upper()}] {self.code}: {self.message}"
+
+
+def aggregate_gate(warnings: list[DiagnosticWarning]) -> GateLevel:
+    """Map the emitted warnings to a single quality-gate level.
+
+    ``pass``     -> no warning-level or critical-level findings;
+    ``caution``  -> at least one warning, none critical;
+    ``fail``     -> at least one critical finding (positivity severely damaged,
+                    degenerate weights, ...). The estimate is still returned,
+    but it must not be presented as a reliable causal ranking.
+    """
+    worst = 0
+    for w in warnings:
+        worst = max(worst, _LEVEL_ORDER[w.level])
+    if worst >= 2:
+        return "fail"
+    if worst == 1:
+        return "caution"
+    return "pass"
+
+
+@dataclass
+class EstimatesTable:
+    """Per-treatment point estimates on the common target population.
+
+    Uncertainty columns (``se``, ``ci_low``, ``ci_high``) are ``NaN`` in Phase 1
+    and are produced by the joint bootstrap in Phase 2. They are kept in the
+    schema so downstream code can rely on a stable column set.
+    """
+
+    labels: tuple[Any, ...]
+    n_treated: np.ndarray
+    raw_mean: np.ndarray
+    weight_sum: np.ndarray
+    ess: np.ndarray
+    mu: np.ndarray
+    se: np.ndarray | None = None
+    ci_low: np.ndarray | None = None
+    ci_high: np.ndarray | None = None
+
+    def to_dataframe(self) -> pd.DataFrame:
+        k = len(self.labels)
+        se = self.se if self.se is not None else np.full(k, np.nan)
+        lo = self.ci_low if self.ci_low is not None else np.full(k, np.nan)
+        hi = self.ci_high if self.ci_high is not None else np.full(k, np.nan)
+        return pd.DataFrame(
+            {
+                "label": list(self.labels),
+                "n_treated": np.asarray(self.n_treated, dtype=int),
+                "raw_mean": np.asarray(self.raw_mean, dtype=float),
+                "mu": np.asarray(self.mu, dtype=float),
+                "se": np.asarray(se, dtype=float),
+                "ci_low": np.asarray(lo, dtype=float),
+                "ci_high": np.asarray(hi, dtype=float),
+                "weight_sum": np.asarray(self.weight_sum, dtype=float),
+                "ess": np.asarray(self.ess, dtype=float),
+            }
+        )
+
+
+@dataclass
+class DiagnosticsReport:
+    """Weight / overlap / balance diagnostics plus the structured warnings."""
+
+    group_summary: pd.DataFrame
+    weights: pd.DataFrame
+    overlap: pd.DataFrame
+    balance: pd.DataFrame  # long-form SMD table (feature x level x pair)
+    balance_summary: pd.DataFrame  # per-term max |SMD| over treatment pairs
+    warnings: list[DiagnosticWarning] = field(default_factory=list)
+
+    @property
+    def gate(self) -> GateLevel:
+        return aggregate_gate(self.warnings)
+
+    def summary(self) -> str:
+        lines: list[str] = []
+        lines.append("=== CausalRank diagnostics (Phase 1: estimation only, no inference) ===")
+        lines.append("")
+        lines.append("-- group summary (observed data) --")
+        lines.append(self.group_summary.to_string(index=False))
+        lines.append("")
+        lines.append("-- weight distribution (Hajek IPTW weights w = 1/e_{T}(X)) --")
+        lines.append(self.weights.to_string(index=False))
+        lines.append("")
+        lines.append("-- overlap: observed-treatment propensity e_{T}(X) --")
+        lines.append(self.overlap.to_string(index=False))
+        lines.append("")
+        lines.append("-- covariate balance (max |SMD| over treatment pairs) --")
+        lines.append(self.balance_summary.to_string(index=False))
+        lines.append(
+            "   (smd_weighted uses Hajek IPTW weights; sd_ref is the unweighted pooled "
+            "within-arm SD; see docs/methodology.md)"
+        )
+        lines.append("")
+        lines.append(f"-- quality gate: {self.gate.upper()} --")
+        if self.warnings:
+            for w in self.warnings:
+                lines.append(f"  {w}")
+        else:
+            lines.append("  no warnings raised (this does NOT validate the causal assumptions)")
+        lines.append(
+            "Reminder: diagnostics can flag empirical problems (extreme weights, residual "
+            "imbalance, weak overlap) but cannot verify no-unmeasured-confounding or consistency."
+        )
+        return "\n".join(lines)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "group_summary": self.group_summary.to_dict(orient="records"),
+            "weights": self.weights.to_dict(orient="records"),
+            "overlap": self.overlap.to_dict(orient="records"),
+            "balance": self.balance.to_dict(orient="records"),
+            "balance_summary": self.balance_summary.to_dict(orient="records"),
+            "warnings": [w.to_dict() for w in self.warnings],
+            "quality_gate": self.gate,
+        }
+
+
+@dataclass
+class CausalRankResult:
+    """Everything returned by ``CausalRank.fit``.
+
+    ``covariance``, ``pairwise`` and ``ranks`` are reserved for Phase 2/3 and
+    are ``None`` in this release; ``inference_available`` makes that state
+    explicit instead of silently omitting uncertainty.
+    """
+
+    effects: EstimatesTable
+    diagnostics: DiagnosticsReport
+    metadata: dict[str, Any]
+    covariance: np.ndarray | None = None
+    pairwise: pd.DataFrame | None = None
+    ranks: pd.DataFrame | None = None
+    inference_available: bool = False
+
+    # ------------------------------------------------------------------
+    @property
+    def warnings(self) -> list[DiagnosticWarning]:
+        return self.diagnostics.warnings
+
+    def summary(self) -> str:
+        est = self.effects.to_dataframe()
+        show = est[["label", "n_treated", "raw_mean", "mu", "se", "ci_low", "ci_high", "ess"]]
+        lines: list[str] = []
+        lines.append("==============================================================")
+        lines.append(" CausalRank result — Phase 1 (point estimates + diagnostics)")
+        lines.append("==============================================================")
+        lines.append(
+            f"estimand : mu_a = E[Y(a)] over the sample population "
+            f"({self.metadata.get('estimand')})"
+        )
+        lines.append(
+            f"estimator: Hajek IPTW with {self.metadata.get('propensity_model')} propensity scores"
+        )
+        lines.append(
+            f"n = {self.metadata.get('n_rows')}, K = {self.metadata.get('n_treatments')}, "
+            f"random_state = {self.metadata.get('random_state')}"
+        )
+        lines.append("")
+        lines.append("-- estimates (mu_a = E[Y(a)], common target population) --")
+        lines.append(show.to_string(index=False))
+        lines.append("")
+        if not self.inference_available:
+            lines.append(
+                "!! uncertainty quantification is NOT available in Phase 1: se / ci / ranks are\n"
+                "!! NaN by design. Joint bootstrap covariance (Phase 2) and multiple-comparison\n"
+                "!! rank confidence sets (Phase 3) are not implemented in this release.\n"
+                "!! Do not read point-estimate ordering as a statistically established ranking."
+            )
+            lines.append("")
+        lines.append(self.diagnostics.summary())
+        return "\n".join(lines)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "effects": self.effects.to_dataframe().to_dict(orient="records"),
+            "covariance": None if self.covariance is None else np.asarray(self.covariance).tolist(),
+            "pairwise": None if self.pairwise is None else self.pairwise.to_dict(orient="records"),
+            "ranks": None if self.ranks is None else self.ranks.to_dict(orient="records"),
+            "inference_available": bool(self.inference_available),
+            "diagnostics": self.diagnostics.to_dict(),
+            "metadata": dict(self.metadata),
+        }
+
+    def to_json(self, indent: int = 2) -> str:
+        """Machine-readable dump; NaN fields are emitted as ``null``."""
+
+        def _default(obj: Any) -> Any:
+            if isinstance(obj, (np.integer,)):
+                return int(obj)
+            if isinstance(obj, (np.floating,)):
+                val = float(obj)
+                return None if not np.isfinite(val) else val
+            if isinstance(obj, np.ndarray):
+                return obj.tolist()
+            raise TypeError(f"Object of type {type(obj)!r} is not JSON serializable")
+
+        return json.dumps(self.to_dict(), indent=indent, default=_default, ensure_ascii=False)
