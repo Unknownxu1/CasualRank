@@ -35,7 +35,7 @@ causalrank/
 │   └── simulation/
 │       ├── dgp.py               # 8 场景 DGP + 独立 MC 参考 mu_true
 │       └── benchmark.py         # 重复实验 Bias/RMSE 框架
-├── tests/                       # 89 个测试（详见 §4）
+├── tests/                       # 97 个测试（详见 §4）
 │   ├── conftest.py, __init__.py
 │   ├── test_validation.py  test_propensity.py  test_iptw.py
 │   ├── test_balance.py     test_diagnostics.py test_dgp.py
@@ -44,7 +44,8 @@ causalrank/
 │   └── 01_gbm_iptw_from_raw_data.ipynb   # 已执行、含真实输出
 ├── scripts/
 │   ├── build_notebook.py        # 可复现地生成示例 notebook
-│   └── run_simulation.py        # 手动研究基准（R=20 级别）
+│   ├── run_simulation.py        # 手动研究基准（R=20 级别，含运行级质量统计）
+│   └── repro_issues.py          # 缺陷复现脚本（审查问题的最小复现）
 └── docs/
     ├── implementation_plan.md   # 架构/定义/测试策略/风险（先行计划）
     ├── methodology.md           # 估计目标、公式、假设、数值边界
@@ -106,17 +107,24 @@ HT 形式 `(1/n) Σ 1{T_a} Y_i/e_a` 仅内部核对（`horvitz_thompson_estimate
 
 ## 3. 测试：命令与数值结果
 
-### 3.1 全部工程检查（最终运行）
+### 3.1 全部工程检查（修订版，含上一版失实更正）
+
+> **更正声明**：上一版报告写“Ruff 全通过”，该结论是在 `scripts/` 目录创建**之前**取得的，
+> 而提交前的最终目录树里有 64 项 RUF001（`scripts/build_notebook.py` 的中文全角标点）
+> 与 1 项 F401（Notebook 中未使用的 `import numpy`），CI 会在 lint 关卡失败。
+> 该表述失实，已修正：中文文本按文件豁免 RUF001（src/tests 保持启用）、
+> 清理未使用导入，并在**最终目录树上**重跑全部检查。以下为修订后的实测结果。
 
 | 检查 | 命令 | 结果 |
 |---|---|---|
-| 单元+端到端测试 | `uv run pytest -q` | **89 passed**（约 2 分钟） |
-| Lint | `uv run ruff check .` | **All checks passed** |
+| 单元+端到端测试 | `uv run pytest -q` | **97 passed**（约 3 分钟；含 2 个 `slow` 基准测试） |
+| Lint | `uv run ruff check .` | **All checks passed**（对最终目录树实测） |
 | 类型 | `uv run mypy` | **Success: no issues found in 17 source files** |
 | 打包 | `uv build` | `causalrank-0.1.0.tar.gz` + `py3-none-any.whl` 成功 |
-| 干净安装 | 新 venv 安装 wheel 后端到端 `fit` | 通过（输出 `clean install OK 0.1.0`） |
+| 干净安装 | 新 venv 安装 wheel 后端到端 `fit` | 通过（`clean install OK 0.1.0`） |
+| Python 3.11 兼容 | 3.11.15 + pandas 3.0.6 venv 安装 wheel 运行 `-m "not slow"` | **95 passed**（慢测试由 CI 执行） |
 | Notebook | `uv run jupyter nbconvert --to notebook --execute` | 全 cell 无错误执行 |
-| CI | `.github/workflows/tests.yml` | 上述全部步骤 + 双 Python 版本矩阵 |
+| CI | `.github/workflows/tests.yml` | lint+type+test+build+notebook，3.11/3.12 矩阵（`uv sync --python` 显式指定并打印解释器版本） |
 
 ### 3.2 手算例（独立计算 vs 实现）
 
@@ -186,6 +194,16 @@ MC 标准误 ≈ 0.00027–0.00028。
   极端权重影响，属方法内在的方差—偏差权衡，非实现缺陷（oracle 权重对照实验已验证）。
 - 快测试（R=6）断言方向性结论：bias 随 n 下降、调整优于未调整、随机化场景双无偏。
 
+**运行级质量统计**（同一次 R=20 基准，`runs_summary`；拟合失败率 0/40）：
+
+| n | gate pass | gate caution | gate fail | 平均警告数 | low_propensity 触发率 | residual_imbalance 触发率 | 平均 min e_obs | 平均 ESS 比最小值 |
+|---|---|---|---|---|---|---|---|---|
+| 1500 | 50% | 50% | 0% | 0.60 | 10% | 50% | 0.025 | 0.47 |
+| 6000 | 65% | 35% | 0% | 0.45 | 25% | 20% | 0.015 | 0.48 |
+
+诊断行为与理论一致：残差失衡触发率随 n 从 50% 降到 20%（加权 SMD 均值 0.111→0.080），
+失败率 0%；这些指标正是 Phase 2 Bootstrap 成功率门槛需要的经验依据。
+
 ---
 
 ## 5. 诊断输出（Notebook `01`，confounded, n=4000）
@@ -206,11 +224,14 @@ x4 各 level 0.069→0.023 等。**质量门控：PASS（无警告）**——同
 
 **弱重叠场景（weak_overlap, n=3000）**：门控 **FAIL**，警告包括
 `low_ess`（ESS≈29、ESS 比 0.021）、`extreme_weight`（单条权重占 17.4%）、
-`low_propensity` 等——这是预期的“诚实失败”形态：给警告、降门控，而非输出可靠排名文案。
+`low_propensity` / `weak_common_support`（目标样本中不可达区域占比高）——
+这是预期的“诚实失败”形态：给警告、降门控，而非输出可靠排名文案。
 
 ---
 
 ## 6. 开发过程中发现并修复的工程问题
+
+### 6.1 第一轮实现期间
 
 1. **循环导入**：`api.py` 从包 `__init__` 取版本号 → 独立 `_version.py`（hatch 动态版本）。
 2. **类对齐层级错误**：模型按 0..K-1 编码拟合，`classes_` 是编码而非标签 →
@@ -225,6 +246,17 @@ x4 各 level 0.069→0.023 等。**质量门控：PASS（无警告）**——同
 6. `IPTWEstimate` 未携带 `t_idx` 使权重诊断无法按组聚合 → 字段补齐；
    `raw_mean/raw_means`、`weight_sum/weight_sums` 命名不一致 → 统一。
 
+### 6.2 外部复核后的修复（第二轮，全部带回归测试）
+
+| # | 级别 | 问题 | 修复 |
+|---|---|---|---|
+| 1 | P1 | **共同支持漏报警**：诊断只看被处理行的 `e_{T}` 与近确定性分配，(0.5,0.5,0)/(0,0.5,0.5)/(0.5,0,0.5) 这类“每臂都有不可达区域”的输入无告警、gate=pass | 新增 `frac_arm_below_threshold`（全目标样本低概率占比）；`e_a(X)=0` → critical `no_common_support`；占比 > `max_unsupported_share`(0.05) → `weak_common_support` |
+| 2 | P1 | **常见 dtype 无法分析**：bool 列在 SimpleImputer 报错、pandas 3 默认字符串 dtype 被校验拒绝、含 `pd.NA` 的 object 列在拟合时 `TypeError: boolean value of NA is ambiguous` | `_is_categorical_dtype` 统一识别 object/StringDtype/category/bool/BooleanDtype；`_normalize_feature_frame` 把类别列归一为 object+`np.nan`、数值列归一为 float64（含可空 `Int64`）；端到端回归测试覆盖四类 dtype |
+| 3 | P1 | **SMD 方差数值不稳定**：`Σx²−n·x̄²` 在大偏移量下灾难性相消，`[1,3] vs [2,6]` 平移 `+1e9` 后 SMD 变 `−inf` | 列中心化 + 两遍方差 `Σ(x−x̄)²`；回归测试覆盖 `+1e9`/`+1e12` 平移不变（加权与未加权） |
+| 4 | P2 | **进度报告与实测不一致**：报告称 Ruff 全过，实测 65 项错误（该结论取得于 `scripts/` 创建之前） | 清理未使用导入；`scripts/*` 按文件豁免 RUF001（中文全角标点是有意排版，src/tests 保持启用）；在最终树上重跑并在 §3.1 记录更正 |
+| 5 | P2 | **CI 双 Python 矩阵未落实**：只装解释器不同步绑定，`.python-version` 固定 3.12，两 job 可能都跑 3.12 | `uv sync --all-groups --python ${{ matrix.python-version }}` + 打印实际解释器；本地已用 3.11.15 实测 95 项通过 |
+| 6 | P2 | **基准缺失败/诊断统计**：仅记 Bias/RMSE/ESS，fit 异常会中断整批 | `run_estimand_benchmark` 捕获失败轮（status/error），新增 `runs`（gate、warning codes、min e_obs、max weight share、min ESS ratio）与 `runs_summary`（失败率、门控分布、各警告触发率）；`summary` 增列 `n_ok/n_failed/failure_rate` |
+
 ---
 
 ## 7. 未满足 / 有意推迟的需求（如实披露）
@@ -233,13 +265,14 @@ x4 各 level 0.069→0.023 等。**质量门控：PASS（无警告）**——同
 |---|---|
 | 联合 Bootstrap 协方差、SE/CI（规格 3.5、Phase 2） | **未实施**（按 §9 指令停止于 Phase 1）；`se/ci` 为 NaN，`covariance=None` |
 | Bonferroni 排名置信集（规格 3.6、Phase 3） | **未实施**；`ranks/pairwise=None` |
-| Bootstrap 失败率/稀有臂协议（3.5） | 协议写入 docs，代码待 Phase 2 |
+| Bootstrap 失败率/稀有臂协议（3.5） | 协议写入 docs，代码待 Phase 2；基准层已能统计 fit 失败率作对照 |
 | 聚类（cluster）bootstrap、重复 ID 检测 | 仅重复行提示（`duplicate_rows`）；无 ID 列接口 |
 | 连续 outcome | 架构预留，v0.1 显式拒绝非 0/1 |
 | 报告可视化（Phase 4） | 未实施（数值 API 不依赖绘图库，符合规格） |
-| Monte Carlo **覆盖率**指标 | 需要推断量，Phase 2/3 后统计；当前只有 Bias/RMSE |
+| Monte Carlo **覆盖率**指标 | 需要推断量，Phase 2/3 后统计；当前只有 Bias/RMSE 与失败/门控/告警率 |
 | 真实公开数据示例 | 未使用（避免许可证风险）；全部为合成数据 |
 | 许可证选择 | 暂用 MIT，文件内注明可改 Apache-2.0，待决策 |
+| **环境怪癖**：Python 3.11 + 非 ASCII 项目路径下 `pip install -e .` 失效 | 非包缺陷：CPython 3.11 的 `site.py` 按 locale 编码读 `.pth`，UTF-8 路径 `D:\workspace\因果排名\src` 被误解码而进不了 `sys.path`（3.12+ 正常）。规避：改用 wheel 安装、或把项目放在 ASCII 路径、或设 `PYTHONUTF8=1`。已在 3.11.15 + wheel 下实测 95 项通过 |
 
 ---
 
@@ -252,6 +285,7 @@ x4 各 level 0.069→0.023 等。**质量门控：PASS（无警告）**——同
 | 联合结构 | `IPTWEstimate.mu` 是 K 维向量；`B×K` draws → `np.cov(draws, rowvar=False, ddof=1)` 一步到位，且**不会再除 n**（结构上无法误用） |
 | 随机数可复现并行 | `random_state` 贯穿 config；Phase 2 用 `SeedSequence.spawn` 按轮派生种子（`benchmark.py` 已示范该模式） |
 | 失败轮处理 | 稀有臂/缺类已在 `fit_propensity` 显式报错 → Bootstrap 捕获为失败轮并计入成功率门槛 |
+| 失败/诊断统计 | 基准层已实现 fit 失败捕获（status/error）、门控分布与各警告码触发率（`runs_summary`，R=20 实测失败率 0/40）；Phase 2 的 Bootstrap 成功率门槛可直接复用同一统计模式 |
 | 结果 schema | `se/ci_low/ci_high` 列、`covariance/pairwise/ranks` 字段已就位，Phase 2/3 只需填充 |
 | 配置位 | `n_bootstrap`、`n_jobs`、`confidence_level` 已在 config 与 metadata 中记录 |
 | 验证基础设施 | DGP 真值、benchmark 框架、手算/不变性测试模式可直接复用于 SE/覆盖率验证 |
@@ -268,7 +302,7 @@ x4 各 level 0.069→0.023 等。**质量门控：PASS（无警告）**——同
 
 ```bash
 uv sync                              # 安装 runtime + dev 依赖
-uv run pytest -q                     # 89 tests
+uv run pytest -q                     # 97 tests
 uv run ruff check . && uv run mypy   # 静态检查
 uv build                             # 打包检查
 uv run jupyter nbconvert --to notebook --execute --inplace examples/01_gbm_iptw_from_raw_data.ipynb

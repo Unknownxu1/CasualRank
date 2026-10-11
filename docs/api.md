@@ -28,6 +28,7 @@ model = CausalRank(
     min_ess=30.0,
     min_ess_ratio=0.2,
     min_propensity_warn=0.01,
+    max_unsupported_share=0.05,    # 目标样本中 e_a(X) 过低的占比上限（共同支持）
     max_weight_share_warn=0.1,
     smd_threshold=0.1,
     smd_severe_threshold=0.25,
@@ -60,10 +61,13 @@ result = model.fit(df)
 
 - `.group_summary`：`label, n, share, raw_outcome_mean, mu_hajek_iptw`；
 - `.weights`：`label, n, weight_sum, ess, ess_ratio, w_min, w_max, max_weight_share` + 权重分位列；
-- `.overlap`：`label, e_arm_*, e_obs_*, frac_obs_below_threshold`；
+- `.overlap`：`label, e_arm_*, e_obs_*, frac_arm_below_threshold, frac_obs_below_threshold`；
+  前者是**整个目标样本**中 `e_a(X)` 低于阈值的占比（共同支持检查），后者是被处理行中的占比；
 - `.balance`：长表 `feature, level, pair, mean_a/b(, _weighted), sd_ref, smd_unweighted, smd_weighted`；
 - `.balance_summary`：每项 `max_abs_smd_*`、超阈值 pair 数；
 - `.warnings`：`DiagnosticWarning(code, level, message, details)` 列表；
+  关键码：`no_common_support`(critical)、`weak_common_support`、`low_propensity`、
+  `low_ess`、`extreme_weight`、`residual_imbalance`、`severe_imbalance`(critical)；
 - `.gate`：`pass | caution | fail`；
 - `.summary()`：上述内容的文本渲染 + 因果提示。
 
@@ -93,7 +97,10 @@ from causalrank.diagnostics import (
 ## 4. 合成数据
 
 ```python
-from causalrank.simulation import make_dataset, make_oracle_frame, run_estimand_benchmark
+from causalrank.simulation import (
+    make_dataset, make_oracle_frame, run_estimand_benchmark,
+    summarize_benchmark, summarize_runs,
+)
 
 ds = make_dataset("confounded", n=4000, random_state=2026)
 ds.df          # x1, x2, x3, x4, treatment, outcome
@@ -103,6 +110,17 @@ ds.mu_true_mc_se, ds.n_reference, ds.reference_seed
 
 `make_oracle_frame` 额外附带真实的 `p_t_*` 与 `p_y_*` 列（测试/oracle 对照用）。
 场景名见 `scenario_names()`（8 个预设）。
+
+`run_estimand_benchmark(...)` 返回 `BenchmarkResult`：
+
+- `.replications`：逐（重复 × 臂）行（含 `status`、`mu_hat`、`raw_mean`、`ess`）；
+- `.summary`：臂级 `bias / rmse / bias_raw / rmse_raw` + `n_ok / n_failed / failure_rate`
+  （只用成功轮计算误差，失败率并列披露）；
+- `.runs`：逐重复行的诊断快照（`quality_gate`、`warning_codes`、`min_e_obs`、
+  `max_weight_share`、`min_ess_ratio`、`max_abs_smd_weighted`、失败时的 `error`）；
+- `.runs_summary`：每个 (scenario, n) 的失败率、门控分布、各警告码触发率、诊断均值。
+
+**拟合失败不会中断整批实验**：失败轮被记录并计入 `failure_rate`，不会被静默丢弃。
 
 ## 5. 异常
 

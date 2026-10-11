@@ -152,3 +152,42 @@ def test_severe_imbalance_raises_critical_warning() -> None:
     )
     codes = {w.code: w.level for w in res.warnings}
     assert codes.get("severe_imbalance") == "critical"
+
+
+def test_smd_is_invariant_to_large_offsets() -> None:
+    """Regression test: a +1e9 shift must not change SMD (numerical stability)."""
+
+    def smd(values: list[float]) -> float:
+        res = standardized_mean_differences(
+            X=pd.DataFrame({"x": values}),
+            t_idx=np.array([0, 0, 1, 1]),
+            labels=LABELS,
+            weights=None,
+            numeric_features=["x"],
+            categorical_features=[],
+            config=make_config(),
+        )
+        row = res.detail[(res.detail["feature"] == "x") & (res.detail["level"].isna())].iloc[0]
+        return float(row["smd_unweighted"])
+
+    base = smd([1.0, 3.0, 2.0, 6.0])
+    assert base == pytest.approx(-2.0 / np.sqrt(5.0), rel=1e-12)
+    assert smd([1e9 + 1, 1e9 + 3, 1e9 + 2, 1e9 + 6]) == pytest.approx(base, rel=1e-12)
+    assert smd([1e9 + 1, 1e9 + 3, 1e9 + 2, 1e9 + 6]) > -1e6  # no -inf regression
+    assert smd([1e12 + 1, 1e12 + 3, 1e12 + 2, 1e12 + 6]) == pytest.approx(base, rel=1e-9)
+
+
+def test_weighted_smd_is_invariant_to_large_offsets() -> None:
+    weights = np.array([1.0, 3.0, 1.0, 1.0])
+    res = standardized_mean_differences(
+        X=pd.DataFrame({"x": [1e9 + 1, 1e9 + 3, 1e9 + 2, 1e9 + 6]}),
+        t_idx=np.array([0, 0, 1, 1]),
+        labels=LABELS,
+        weights=weights,
+        numeric_features=["x"],
+        categorical_features=[],
+        config=make_config(),
+    )
+    row = res.detail[(res.detail["feature"] == "x") & (res.detail["level"].isna())].iloc[0]
+    assert row["smd_weighted"] == pytest.approx((2.5 - 4.0) / np.sqrt(5.0), rel=1e-9)
+    assert row["mean_a_weighted"] == pytest.approx(1e9 + 2.5, rel=1e-12)

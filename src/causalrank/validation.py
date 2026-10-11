@@ -143,22 +143,62 @@ def _normalize_outcome(y_raw: pd.Series) -> np.ndarray:
 # ---------------------------------------------------------------------------
 # covariates
 # ---------------------------------------------------------------------------
+def _is_categorical_dtype(dtype: Any) -> bool:
+    """True for dtypes holding categorical *values* (incl. pandas 3 string dtype).
+
+    pandas 3 infers ``StringDtype`` (printed as ``str``) for ordinary string
+    columns and offers nullable boolean/integer dtypes; all of these must route
+    to the categorical branch instead of being rejected or sent to the numeric
+    imputer.
+    """
+    return bool(
+        isinstance(dtype, (pd.CategoricalDtype, pd.StringDtype, pd.BooleanDtype))
+        or pd.api.types.is_object_dtype(dtype)
+        or pd.api.types.is_bool_dtype(dtype)
+        or pd.api.types.is_string_dtype(dtype)
+    )
+
+
 def _feature_kinds(X: pd.DataFrame) -> tuple[list[str], list[str]]:
     numeric: list[str] = []
     categorical: list[str] = []
     for col in X.columns:
         s = X[col]
-        if isinstance(s.dtype, pd.CategoricalDtype) or s.dtype == object or s.dtype == bool or isinstance(s.dtype, pd.BooleanDtype):
+        if _is_categorical_dtype(s.dtype):
             categorical.append(str(col))
         elif pd.api.types.is_numeric_dtype(s):
             numeric.append(str(col))
         else:
             raise CausalRankValidationError(
                 f"Confounder {col!r} has unsupported dtype {s.dtype!r}. Use numeric dtypes for "
-                "continuous covariates and object/category/bool for categorical ones "
+                "continuous covariates and object/string/category/bool for categorical ones "
                 "(e.g. df[col] = df[col].astype('category'))."
             )
     return numeric, categorical
+
+
+def _normalize_feature_frame(X: pd.DataFrame) -> pd.DataFrame:
+    """Standardise covariate dtypes so that sklearn and the diagnostics agree.
+
+    * categorical-ish columns (object / string / category / bool) become plain
+      ``object`` with ``np.nan`` for every missing marker (``pd.NA``, ``pd.NaT``,
+      ``None``, ``NaN``) — sklearn's imputer/encoder raise
+      ``TypeError: boolean value of NA is ambiguous`` on raw ``pd.NA``;
+    * numeric columns become ``float64`` (nullable ``Int64`` would be rejected
+      by ``SimpleImputer``).
+
+    Values themselves are never altered, only their container representation.
+    """
+    out = X.copy()
+    for col in out.columns:
+        s = out[col]
+        if _is_categorical_dtype(s.dtype):
+            values = np.asarray(s.astype(object).to_numpy(), dtype=object).copy()
+            values[s.isna().to_numpy()] = np.nan
+            out[col] = pd.Series(values, index=out.index, dtype=object)
+        else:
+            out[col] = s.astype("float64")
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -214,6 +254,7 @@ def validate_dataframe(df: pd.DataFrame, config: CausalRankConfig) -> ValidatedD
     # ---- covariates -----------------------------------------------------
     X = df.loc[:, list(config.confounders)].copy()
     numeric_features, categorical_features = _feature_kinds(X)
+    X = _normalize_feature_frame(X)
 
     missing_rates: dict[str, float] = {}
     for col in config.confounders:

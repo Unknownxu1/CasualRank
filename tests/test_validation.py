@@ -208,6 +208,32 @@ def test_unsupported_confounder_dtype_raises(simple_df: pd.DataFrame) -> None:
         validate_dataframe(df, make_config())
 
 
+def test_common_pandas_dtypes_are_accepted_and_normalised() -> None:
+    """bool / pandas string dtype / object-with-pd.NA / nullable Int64 must work."""
+    rng = np.random.default_rng(4)
+    n = 60
+    df = pd.DataFrame(
+        {
+            "x_bool": pd.Series(rng.random(n) > 0.5),
+            "x_str": pd.Series([["a", "b", "c"][i % 3] for i in range(n)]),
+            "x_obj": pd.Series([("m", "n", pd.NA)[i % 3] for i in range(n)], dtype=object),
+            "x_int": pd.Series([1, 2, pd.NA] * (n // 3), dtype="Int64"),
+            "treatment": pd.Series(["A", "B"] * (n // 2)),
+            "outcome": pd.Series(rng.integers(0, 2, size=n).astype(float)),
+        }
+    )
+    validated = validate_dataframe(
+        df, make_config(confounders=("x_bool", "x_str", "x_obj", "x_int"))
+    )
+    assert validated.categorical_features == ["x_bool", "x_str", "x_obj"]
+    assert validated.numeric_features == ["x_int"]
+    # normalised: no pd.NA survives into the analysis frame, numerics are float64
+    assert not validated.X["x_obj"].map(lambda v: v is pd.NA).any()
+    assert validated.X["x_int"].dtype == float
+    assert validated.X["x_str"].dtype == object
+    assert validated.X["x_bool"].dtype == object
+
+
 # --- configuration validation ------------------------------------------
 def test_config_rejects_unsupported_methods() -> None:
     with pytest.raises(CausalRankValidationError, match="not supported in Phase 1"):

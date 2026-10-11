@@ -66,6 +66,45 @@ def test_low_ess_warning() -> None:
     assert codes.count("low_ess") >= 1
 
 
+def test_common_support_gap_on_target_sample_is_flagged() -> None:
+    """Rows where an arm has zero reach must warn even if treated rows look fine.
+
+    Regression test: each arm is treated with moderate propensity on its own
+    rows, but every arm is unsupported on one third of the target sample.
+    """
+    propensity = np.array(
+        [
+            [0.5, 0.5, 0.0],
+            [0.0, 0.5, 0.5],
+            [0.5, 0.0, 0.5],
+        ]
+    )
+    t_idx = np.array([0, 1, 2])
+    from .conftest import make_config
+
+    table, warnings = overlap_diagnostics(propensity, t_idx, ["A", "B", "C"], make_config())
+    assert np.allclose(table["frac_arm_below_threshold"].to_numpy(), 1 / 3)
+    codes = {w.code: w.level for w in warnings}
+    assert codes.get("no_common_support") == "critical"
+    assert sum(1 for w in warnings if w.code == "no_common_support") == 3
+
+
+def test_weak_common_support_share_triggers_warning() -> None:
+    """Non-zero but tiny reach over a large share of the sample also warns."""
+    propensity = np.full((20, 2), 0.5)
+    propensity[:, 0] = np.array([0.005] * 5 + [0.6] * 15)  # arm A weak on 25% of rows
+    propensity[:, 1] = 1.0 - propensity[:, 0]
+    t_idx = np.array([0] * 10 + [1] * 10)
+    from .conftest import make_config
+
+    table, warnings = overlap_diagnostics(propensity, t_idx, ["A", "B"], make_config())
+    row_a = table[table["label"] == "A"].iloc[0]
+    assert row_a["frac_arm_below_threshold"] == pytest.approx(0.25)
+    codes = {w.code for w in warnings}
+    assert "weak_common_support" in codes
+    assert "no_common_support" not in codes  # nothing is exactly zero
+
+
 def test_overlap_table_and_low_propensity_warning() -> None:
     propensity = np.array(
         [

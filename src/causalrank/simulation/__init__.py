@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from .benchmark import BenchmarkResult, run_estimand_benchmark, summarize_benchmark
+from .benchmark import (
+    BenchmarkResult,
+    run_estimand_benchmark,
+    summarize_benchmark,
+    summarize_runs,
+)
 from .dgp import (
     CONFOUNDER_COLS,
     OUTCOME_COL,
@@ -30,4 +35,5 @@ __all__ = [
     "run_estimand_benchmark",
     "scenario_names",
     "summarize_benchmark",
+    "summarize_runs",
 ]

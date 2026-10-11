@@ -80,6 +80,7 @@ class CausalRankConfig:
     min_ess: float = 30.0
     min_ess_ratio: float = 0.2
     min_propensity_warn: float = 0.01
+    max_unsupported_share: float = 0.05
     max_weight_share_warn: float = 0.1
     smd_threshold: float = 0.1
     smd_severe_threshold: float = 0.25
@@ -171,6 +172,8 @@ class CausalRankConfig:
             raise CausalRankValidationError("min_ess must be > 0 and min_ess_ratio in (0, 1].")
         if not (0.0 < float(self.min_propensity_warn) < 0.5):
             raise CausalRankValidationError("min_propensity_warn must lie in (0, 0.5).")
+        if not (0.0 < float(self.max_unsupported_share) <= 1.0):
+            raise CausalRankValidationError("max_unsupported_share must lie in (0, 1].")
         if not (0.0 < float(self.max_weight_share_warn) <= 1.0):
             raise CausalRankValidationError("max_weight_share_warn must lie in (0, 1].")
         if not (0.0 < float(self.smd_threshold) < float(self.smd_severe_threshold)):

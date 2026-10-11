@@ -28,8 +28,14 @@ $$e_a(x) = P(T = a \mid X = x), \qquad \sum_{a=1}^K e_a(x) = 1.$$
 
 | 变量 | 处理 |
 |---|---|
-| 数值 | `SimpleImputer(strategy="median"\|"mean"\|"constant")`（训练折内 fit） |
-| 类别 | `SimpleImputer(strategy="most_frequent"\|"constant")` + `OneHotEncoder(handle_unknown="ignore", sparse_output=False)` |
+| 数值 | 统一转 `float64`（可空 `Int64` 等会被 `SimpleImputer` 拒绝）；`SimpleImputer(strategy="median"\|"mean"\|"constant")`（训练折内 fit） |
+| 类别 | 统一转 `object`，所有缺失标记（`pd.NA`/`NaN`/`None`/`pd.NaT`）归一为 `np.nan`；`SimpleImputer(strategy="most_frequent"\|"constant")` + `OneHotEncoder(handle_unknown="ignore", sparse_output=False)` |
+
+**dtype 约定**（pandas 2/3 兼容）：`object` / `StringDtype`（pandas 3 默认字符串类型）/
+`category` / `bool` / `BooleanDtype` 一律按**类别**处理并归一表示；日期时间等其余类型
+显式报错。归一化只改容器表示不改取值——原因是 sklearn 的 imputer/encoder 遇到裸 `pd.NA`
+会抛 `TypeError: boolean value of NA is ambiguous`，`bool` 列会被 `SimpleImputer` 拒绝。
+回归测试覆盖 bool / 字符串 / 含 `pd.NA` 的 object / 可空 `Int64` 四类协变量的端到端分析。
 
 规则：
 - 插补器、编码器、GBM 只在**训练折 / Bootstrap 重抽样**内 fit，绝不在整份样本上预 fit；
@@ -94,9 +100,21 @@ $$\mathrm{ESS}_a = \frac{\left(\sum_i w_{ia}\right)^2}{\sum_i w_{ia}^2}, \qquad 
 
 对每个 Treatment `a` 输出：
 - $e_a(X)$ 在**全部样本**上的分位数（该臂在协变量空间中的可达范围，positivity 需要它为正）；
+- `frac_arm_below_threshold`：**整个目标样本**中 $e_a(X) <$ `min_propensity_warn` 的占比；
 - $e_{T_i}(X_i)$ 在被分配到 `a` 的行上的分位数（IPTW 权重分母）；
 - $e_{T_i}(X_i) < $ `min_propensity_warn` 的比例；
 - 全局：$\max_a e_a(X)$ 接近 1 的行占比（近确定性分配）。
+
+**共同支持检查覆盖目标样本，而不只是被处理行**（回归用例：三行概率
+(0.5,0.5,0) / (0,0.5,0.5) / (0.5,0,0.5)——每臂在自己被处理的行上概率都正常，
+但在 1/3 的目标样本上完全不可达）：
+
+| 触发条件 | 警告码 | 级别 |
+|---|---|---|
+| 某行 $e_a(X)=0$ | `no_common_support` | critical（$E[Y(a)]$ 在该区域不可识别） |
+| `frac_arm_below_threshold` > `max_unsupported_share`（默认 0.05） | `weak_common_support` | warning（人群均值依赖外推） |
+| 被处理行 $e_{T_i}$ < `min_propensity_warn` | `low_propensity` | warning（权重极端） |
+| 近确定性分配行占比 > 5% | `low_propensity` | warning |
 
 ### 4.3 标准化均值差 SMD
 
@@ -115,6 +133,10 @@ s_{\mathrm{ref}} = \sqrt{\frac{s_a^2 + s_b^2}{2}}$$
 - 汇报：每个项在所有 pair 上的 `max|SMD|`（加权/未加权）、超过 0.1 / 0.25 的 pair 数。
 - 边界：$s_{\mathrm{ref}}=0$ 且均值差为 0 → SMD=0；$s_{\mathrm{ref}}=0$ 且均值差非 0 → $\pm\infty$
   并触发 `degenerate_smd`；有效观测数 < 2 → SMD=NaN。
+- **数值稳定性**：SMD 是平移不变量，实现先对每个项按全体均值做列中心化，方差用两遍
+  公式 $\sum(x-\bar x)^2$ 计算，**不**使用 $\sum x^2 - n\bar x^2$（后者在数据带大偏移量时
+  灾难性相消，实测 `[1,3] vs [2,6]` 平移 `+1e9` 会把 SMD 变成 `-inf`）；
+  回归测试覆盖 `+1e9` 与 `+1e12` 平移不变性。
 
 **解释限制**：`max|SMD| <= 0.1` 只是筛查惯例，不是充分条件；弱混杂变量平衡不能掩盖
 未测量强混杂的存在。加权后 SMD 变差（> 未加权）是模型失配/极端权重的信号，应如实报告。
@@ -123,7 +145,8 @@ s_{\mathrm{ref}} = \sqrt{\frac{s_a^2 + s_b^2}{2}}$$
 
 `quality_gate = pass | caution | fail`：`info` 不降级，`warning` → `caution`，
 `critical` → `fail`。警告码：`small_group`、`rare_treatment`、`low_propensity`、
-`extreme_weight`、`low_ess`、`residual_imbalance`、`severe_imbalance`、`duplicate_rows`、
+`weak_common_support`、`no_common_support`、`extreme_weight`、`low_ess`、
+`residual_imbalance`、`severe_imbalance`、`duplicate_rows`、
 `high_cardinality_categorical`、`missing_covariates`、`propensity_clipped`、
 `degenerate_smd`、`label_dtype_cast`。门控只陈述经验诊断结果，
 **不会**输出“可靠因果排序”类结论。

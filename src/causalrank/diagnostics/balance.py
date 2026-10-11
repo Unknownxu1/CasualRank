@@ -85,7 +85,9 @@ def _term_matrix(
         is_missing = s.isna().to_numpy()
         present = s[~is_missing]
         for level in sorted(pd.unique(present).tolist(), key=str):
-            indicator = ((s == level).to_numpy() & ~is_missing).astype(float)
+            # fillna(False) keeps pd.NA markers from breaking the comparison
+            eq = s.eq(level).fillna(False).to_numpy(dtype=bool)
+            indicator = (eq & ~is_missing).astype(float)
             names.append(str(col))
             levels.append(str(level))
             columns.append(indicator)
@@ -109,6 +111,12 @@ def _group_stats(
     ``sd`` is the *unweighted* ddof=1 sample standard deviation computed on the
     observed entries of the term — the pooled reference SD that weights cannot
     move. Terms with fewer than 2 observed entries yield NaN.
+
+    Numerics: the variance is computed two-pass, ``ss = sum (x - mean)^2``,
+    never as ``sum x^2 - n*mean^2`` — the latter cancels catastrophically when
+    the data carry a large offset (e.g. values around 1e9), turning a real SMD
+    into ``inf``/``NaN``. The caller additionally centres every column before
+    calling this, so the means themselves are also computed near zero.
     """
     Zg = Z[mask]
     Vg = valid[mask]
@@ -121,8 +129,8 @@ def _group_stats(
     with np.errstate(invalid="ignore", divide="ignore"):
         raw_mean = np.where(n_obs > 0, raw_sum / n_obs, np.nan)
         w_mean = np.where(wsum_obs > 0, (wg @ Zv) / wsum_obs, np.nan)
-        sq_sum = (Zv * Zv).sum(axis=0)
-        ss = sq_sum - n_obs * np.where(n_obs > 0, raw_mean, 0.0) ** 2
+        centered = np.where(Vg, Zg - np.where(n_obs > 0, raw_mean, 0.0), 0.0)
+        ss = (centered * centered).sum(axis=0)
         sd = np.where(n_obs > 1, np.sqrt(np.maximum(ss, 0.0) / (n_obs - 1)), np.nan)
     return raw_mean, w_mean, sd
 
@@ -157,6 +165,14 @@ def standardized_mean_differences(
     k = len(labels)
     w = np.ones(n, dtype=float) if weights is None else np.asarray(weights, dtype=float)
 
+    # Centre every term on its overall valid mean: SMD is shift-invariant by
+    # definition, and centring keeps both means and variances numerically
+    # stable for data with large offsets (e.g. timestamps in seconds).
+    n_valid = valid.sum(axis=0).astype(float)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        offset = np.where(n_valid > 0, (Z * valid).sum(axis=0) / n_valid, 0.0)
+    Z = np.where(valid, Z - offset, 0.0)
+
     detail_rows: list[dict[str, Any]] = []
     degenerate = False
 
@@ -181,10 +197,10 @@ def standardized_mean_differences(
                     "feature": names[j],
                     "level": levels[j],
                     "pair": pair_name,
-                    "mean_a": float(mean_a_raw[j]),
-                    "mean_b": float(mean_b_raw[j]),
-                    "mean_a_weighted": float(mean_a_w[j]),
-                    "mean_b_weighted": float(mean_b_w[j]),
+                    "mean_a": float(mean_a_raw[j] + offset[j]),
+                    "mean_b": float(mean_b_raw[j] + offset[j]),
+                    "mean_a_weighted": float(mean_a_w[j] + offset[j]),
+                    "mean_b_weighted": float(mean_b_w[j] + offset[j]),
                     "sd_ref": float(np.sqrt((sd_a[j] ** 2 + sd_b[j] ** 2) / 2.0))
                     if np.isfinite(sd_a[j]) and np.isfinite(sd_b[j])
                     else float("nan"),

@@ -157,3 +157,34 @@ def test_column_name_errors_are_clear() -> None:
         CausalRank(
             treatment="treatment", outcome="outcome", confounders=["nope"]
         ).fit(ds.df)
+
+
+def test_real_world_dtypes_run_end_to_end() -> None:
+    """bool / string / object-with-pd.NA / nullable Int64 covariates and string labels."""
+    rng = np.random.default_rng(14)
+    n = 600
+    x_num = rng.normal(size=n)
+    df = pd.DataFrame(
+        {
+            "x_bool": pd.Series(rng.random(n) > 0.5),
+            "x_str": pd.Series([["s", "m", "l"][min(2, max(0, int(v * 2 + 1)))] for v in x_num]),
+            "x_obj": pd.Series([("u", "v", pd.NA)[i % 3] for i in range(n)], dtype=object),
+            "x_int": pd.Series([int(abs(v) * 3) if i % 7 else pd.NA for i, v in enumerate(x_num)],
+                               dtype="Int64"),
+            "x_num": x_num,
+            "treatment": pd.Series(np.where(x_num > 0.5, "B", "A")),
+            "outcome": pd.Series(
+                ((x_num + rng.normal(scale=0.8, size=n) + 0.3 * (x_num > 0.5)) > 0).astype(float)
+            ),
+        }
+    )
+    result = CausalRank(
+        treatment="treatment",
+        outcome="outcome",
+        confounders=["x_bool", "x_str", "x_obj", "x_int", "x_num"],
+        random_state=2026,
+    ).fit(df)
+    est = result.effects.to_dataframe()
+    assert np.all(np.isfinite(est["mu"]))
+    assert list(est["label"]) == ["A", "B"]
+    assert not result.diagnostics.balance.empty

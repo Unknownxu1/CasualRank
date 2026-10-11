@@ -48,13 +48,19 @@ def main() -> None:
     bench.replications.to_csv(args.out, index=False)
     summary_path = args.out.with_name(args.out.stem + "_summary.csv")
     bench.summary.to_csv(summary_path, index=False)
+    runs_path = args.out.with_name(args.out.stem + "_runs.csv")
+    bench.runs.to_csv(runs_path, index=False)
 
+    print("== arm-level bias / RMSE (successful runs only) ==")
     print(bench.summary.round(5).to_string(index=False))
     print()
+    print("== run-level quality statistics ==")
+    print(bench.runs_summary.round(4).to_string(index=False))
+    print()
     print(f"ground truth reference: n = {bench.n_reference}, seed = {bench.reference_seed}")
-    print(f"replications: {len(bench.replications) // args.replications} rows per replication")
+    print(f"runs: {len(bench.runs)} ({int((bench.runs['status'] != 'ok').sum())} failed)")
     print(f"elapsed: {elapsed:.1f}s")
-    print(f"wrote {args.out} and {summary_path}")
+    print(f"wrote {args.out}, {summary_path} and {runs_path}")
 
 
 if __name__ == "__main__":

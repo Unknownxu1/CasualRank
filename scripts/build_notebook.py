@@ -27,7 +27,6 @@ CELLS: list[dict[str, object]] = [
     {
         "cell_type": "code",
         "source": [
-            "import numpy as np\n",
             "import pandas as pd\n",
             "\n",
             "from causalrank import CausalRank\n",

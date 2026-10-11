@@ -22,8 +22,11 @@ jobs:
       - name: Set up Python ${{ matrix.python-version }}
         run: uv python install ${{ matrix.python-version }}
 
-      - name: Install dependencies
-        run: uv sync --all-groups
+      - name: Install dependencies (pinned to the matrix interpreter)
+        run: uv sync --all-groups --python ${{ matrix.python-version }}
+
+      - name: Show interpreter actually used
+        run: uv run python --version
 
       - name: Ruff
         run: uv run ruff check .

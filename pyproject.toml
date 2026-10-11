@@ -81,6 +81,10 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["E731", "B011"]
+# scripts/build_notebook.py embeds Chinese notebook text; full-width punctuation
+# there is intentional typography, not an accidental look-alike character.
+# RUF001 stays active for src/ and tests/ where all strings are ASCII/English.
+"scripts/*" = ["RUF001"]
 
 [tool.mypy]
 python_version = "3.11"

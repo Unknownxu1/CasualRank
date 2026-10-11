@@ -67,3 +67,37 @@ def test_summarize_benchmark_is_consistent() -> None:
     # summarising twice is idempotent
     again = summarize_benchmark(bench.replications)
     assert np.allclose(again["bias"], bench.summary["bias"])
+
+
+def test_failed_runs_are_recorded_not_raised() -> None:
+    """A fit that throws must be recorded with its error, not abort the batch."""
+    bench = run_estimand_benchmark(
+        "confounded",
+        n_values=(300,),
+        n_replications=3,
+        random_state=3,
+        estimator_kwargs={"cross_fit": 1000},  # impossible fold count -> fit error
+    )
+    assert len(bench.runs) == 3
+    assert (bench.runs["status"] == "failed").all()
+    assert bench.runs["error"].str.contains("cross_fit").all()
+    assert float(bench.summary["failure_rate"].max()) == 1.0
+    assert bench.summary["bias"].isna().all()
+    assert float(bench.runs_summary["failure_rate"].iloc[0]) == 1.0
+
+
+def test_run_diagnostics_capture_gates_and_warnings() -> None:
+    bench = run_estimand_benchmark("weak_overlap", n_values=(400,), n_replications=2, random_state=5)
+    runs = bench.runs
+    assert {"quality_gate", "warning_codes", "min_e_obs", "max_weight_share"} <= set(runs.columns)
+    assert (runs["status"] == "ok").all()
+    # weak overlap must degrade the gate and raise diagnostic warnings
+    assert (runs["quality_gate"] != "pass").any()
+    assert runs["warning_codes"].str.len().gt(0).all()
+
+    rs = bench.runs_summary
+    assert int(rs["n_runs"].iloc[0]) == 2
+    assert float(rs["failure_rate"].iloc[0]) == 0.0
+    warn_cols = [c for c in rs.columns if c.startswith("warn_")]
+    assert warn_cols, "expected warning trigger-rate columns for weak_overlap"
+    assert any(float(rs[c].iloc[0]) > 0 for c in warn_cols)
