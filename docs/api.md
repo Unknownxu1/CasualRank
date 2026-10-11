@@ -13,9 +13,13 @@ model = CausalRank(
     propensity_model="gbm",        # 仅 "gbm"（联合多分类）
     estimand="population_mean",    # 仅 "population_mean"
     weighting="hajek",             # 仅 "hajek"
-    confidence_level=0.95,         # Phase 2/3 才使用
-    n_bootstrap=300,               # Phase 2 才使用
-    n_jobs=1,                      # Phase 2 才使用
+    confidence_level=0.95,         # 单项 CI 置信水平
+    n_bootstrap=None,              # >= 1 显式开启联合 Bootstrap 推断（每轮重拟合，较慢）
+    n_jobs=1,                      # Bootstrap 并行度（结果与串行逐位一致）
+    ci_method="normal",            # "normal" 或 "percentile"（后者需保留 draws）
+    bootstrap_keep_draws=True,     # 是否保留 B×K draws
+    bootstrap_min_success_rate=0.9,# 低于此成功率阻断推断
+    bootstrap_min_successes=30,    # 低于此成功轮数阻断推断
     random_state=2026,
     cross_fit=5,                   # None 或 int >= 2：OOF 倾向得分
     clip_propensity=None,          # None 或 eps in (0, 0.5)：显式下界裁剪
@@ -42,20 +46,20 @@ result = model.fit(df)
 
 ## 2. 返回对象 `CausalRankResult`
 
-| 字段 | 类型 | Phase 1 内容 |
+| 字段 | 类型 | 内容 |
 |---|---|---|
-| `effects` | `EstimatesTable` | 各臂点估计与权重/ESS |
-| `covariance` | `np.ndarray \| None` | `None`（Phase 2） |
+| `effects` | `EstimatesTable` | 各臂点估计与权重/ESS；`se/ci_*` 在启用推断后填充 |
+| `covariance` | `np.ndarray \| None` | `Σ_boot`（K×K，标签规范序）；未启用/被阻断时为 `None` |
 | `pairwise` | `DataFrame \| None` | `None`（Phase 3） |
 | `ranks` | `DataFrame \| None` | `None`（Phase 3） |
 | `diagnostics` | `DiagnosticsReport` | 诊断表 + 结构化警告 |
-| `metadata` | `dict` | 配置、版本、样本量、公式、免责声明 |
-| `inference_available` | `bool` | `False` |
+| `metadata` | `dict` | 配置、版本、`bootstrap`（B/成功轮/失败原因/base_seed）、免责声明 |
+| `inference_available` | `bool` | 推断是否产出 |
 
 ### 2.1 `result.effects.to_dataframe()`
 
 列：`label, n_treated, raw_mean, mu, se, ci_low, ci_high, weight_sum, ess`。
-`label` 按**规范序**（排序后的唯一标签）排列；`se / ci_low / ci_high` 为 `NaN`（Phase 1）。
+`label` 按**规范序**（排序后的唯一标签）排列；未启用推断时 `se / ci_low / ci_high` 为 `NaN`。
 
 ### 2.2 `result.diagnostics`
 
@@ -87,11 +91,19 @@ from causalrank.estimators import (
 from causalrank.diagnostics import (
     weight_diagnostics, overlap_diagnostics, standardized_mean_differences,
 )
+from causalrank.inference import (
+    joint_bootstrap,       # 联合重拟合 Bootstrap -> JointBootstrapResult
+    derive_round_seeds, resample_indices,
+    validate_covariance,   # 对称/对角/PSD 校验（非 PSD 报错，不修补）
+    normal_ci, percentile_ci,
+)
 ```
 
 - `PropensityFit.propensity`：`(n, K)`，列顺序 = `labels`，行和为 1；
 - `IPTWEstimate`：`mu, weights, weight_sums, numerators, ess, n_treated, raw_means,
   observed_propensity, clipped_fraction`；
+- `JointBootstrapResult`：`draws (B_ok×K)`、`covariance (K×K)`、`failures`
+  （`round/seed/reason` 结构化失败报告）、`seeds`、`base_seed`、`usable`、`warnings`；
 - `horvitz_thompson_estimate` 为**内部**核对函数，不承诺公共 API 稳定性。
 
 ## 4. 合成数据
@@ -122,6 +134,15 @@ ds.mu_true_mc_se, ds.n_reference, ds.reference_seed
 
 **拟合失败不会中断整批实验**：失败轮被记录并计入 `failure_rate`，不会被静默丢弃。
 
+`run_se_benchmark(...)` 返回 `SEBenchmarkResult`（Phase 2 校准）：
+
+- `.replications`：逐（重复 × 臂）行（`mu_hat / se_hat / ci_low / ci_high / covers`）；
+- `.summary`：`empirical_sd`（$\hat\mu$ 的经验标准差）、`mean_se`、`se_ratio = mean_se/empirical_sd`、
+  `coverage` 与 `coverage_mc_se = sqrt(p(1-p)/R)`。
+
+研究脚本：`scripts/run_simulation.py`（Bias/RMSE/失败与门控统计）、
+`scripts/run_se_validation.py`（SE 校准与覆盖率）。
+
 ## 5. 异常
 
 - `CausalRankValidationError`（兼 `ValueError`）：输入/配置不满足契约；
@@ -129,7 +150,8 @@ ds.mu_true_mc_se, ds.n_reference, ds.reference_seed
 
 ## 6. 稳定性约定
 
-- 数值列的**顺序与名称**在 Phase 2/3 只增不改（`se/ci` 将被填充，`covariance/pairwise/ranks`
-  将从 `None` 变为有值）；
+- 数值列的**顺序与名称**只增不改（`pairwise/ranks` 将在 Phase 3 从 `None` 变为有值）；
 - 警告 `code` 为稳定标识，`message` 文本可变；
-- `metadata` 的键只增不删。
+- `metadata` 的键只增不删；
+- 同数据 + 同 `random_state` + 同配置 → 逐位一致的结果（含 Bootstrap draws 与 Σ），
+  与 `n_jobs` 无关。

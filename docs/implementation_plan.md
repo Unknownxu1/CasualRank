@@ -146,3 +146,21 @@ Monte Carlo 误差按 `sqrt(p(1-p)/R)` 报告；快测试与研究基准分开�
 2. **M1**：validation + propensity + IPTW + 手算测试通过。
 3. **M2**：诊断 + 质量门控 + DGP + 场景验证测试通过。
 4. **M3**：Notebook 可执行、文档齐全、lint/type/build 全绿、CI 配置完成、进度报告。
+5. **M4（Phase 2）**：联合 Bootstrap 协方差 + SE/CI + 失败轮披露/推断阻断 +
+   SE/覆盖率 Monte Carlo 校准 + Notebook 02。
+
+## 7. Phase 2 实施增补（已完成）
+
+- **模块**：`src/causalrank/inference/bootstrap.py`（联合重抽样、每轮重拟合、
+  种子派生、失败报告、Σ 校验、normal/percentile CI）；
+- **集成**：`CausalRank.fit` 在 `n_bootstrap >= 1` 时产出 `covariance / se / ci_*`；
+- **关键取舍**：
+  1. `n_bootstrap` 默认 `None`（显式开启推断）。原因：每轮重拟合全部协议，
+     300 轮会把秒级 fit 变成分钟级；无提示地慢 300 倍比显式开关更糟。
+     规格示例本身显式传 `n_bootstrap=300`，不受默认值影响。
+  2. 逐轮种子用 `SeedSequence(base_seed).spawn(B)`，同时驱动重抽样与模型随机性
+     → 与执行顺序、`n_jobs` 无关（有测试断言 n_jobs=2 与串行逐位一致）。
+  3. 失败轮（稀有臂漏抽等）记录 `{round, seed, reason}` 并排除；成功轮数/成功率
+     低于门槛时**阻断推断**（critical 警告 + 原因清单），而非输出可疑协方差。
+  4. `validate_covariance()` 对非对称/负对角/非 PSD **明确报错**，不做数值修补。
+  5. joblib 仅用于轮间并行（新增显式依赖），单线程路径不依赖它。

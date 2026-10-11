@@ -166,24 +166,80 @@ s_{\mathrm{ref}} = \sqrt{\frac{s_a^2 + s_b^2}{2}}$$
 | 协变量 dtype 不支持（日期等） | 报错并提示转换方式 |
 | 重复行 | 警告 `duplicate_rows`（iid 假设提示） |
 
-## 6. 本版本**不**提供（Phase 2/3 及以后）
+## 6. 联合 Bootstrap 协方差（Phase 2）
 
-- 联合 Bootstrap 协方差 $\hat\Sigma$、标准误、单项 CI（Phase 2）；
-- Bonferroni 同时差值区间、排名置信集（Phase 3）；
+### 6.1 协议
+
+令原样本估计向量 $\hat{\boldsymbol\mu} = (\hat\mu_1,\ldots,\hat\mu_K)^\top$。第 $b$ 轮：
+
+1. 用**同一个**行索引向量（有放回，单位=观测行）重抽样全部行；
+2. 在重抽样样本上**重新执行全部协议**：校验、插补/编码、GBM 倾向拟合
+   （含 `cross_fit` 的重新折划分）、权重与全部 K 组 Hájek 均值；
+3. 得到 $\hat{\boldsymbol\mu}^{*(b)}$（列序=公开标签规范序）。
+
+$$\hat\Sigma_{\mathrm{boot}} = \frac{1}{B-1}\sum_{b=1}^B
+(\hat{\boldsymbol\mu}^{*(b)} - \bar{\boldsymbol\mu}^*)(\hat{\boldsymbol\mu}^{*(b)} - \bar{\boldsymbol\mu}^*)^\top
+\;\equiv\; \texttt{np.cov(draws, rowvar=False, ddof=1)}$$
+
+**绝对不能再除以 $n$**：每行是完整估计量向量，不是单条客户的贡献值（有测试显式断言）。
+
+### 6.2 随机数与可复现性
+
+- 第 $b$ 轮种子由 `SeedSequence(base_seed).spawn(B)` 派生，同时驱动重抽样与模型随机性
+  （折划分、GBM）；
+- 固定 `random_state` → 结果逐位可复现；**与执行顺序、`n_jobs` 并行度无关**（有测试）；
+- `random_state=None` 时从系统熵生成 `base_seed` 并记录在 `result.metadata["bootstrap"]`。
+
+### 6.3 失败轮与推断阻断
+
+- 某轮若漏抽稀有臂、或数值失败：记录 `{round, seed, reason}` 并从 draw 矩阵排除，
+  **绝不静默丢弃**；`bootstrap_failures` 警告给出失败数与原因分类；
+- 阻断门槛（可配置）：成功轮数 < `bootstrap_min_successes`（默认 30）或成功率 <
+  `bootstrap_min_success_rate`（默认 0.9）→ **不产出 Σ/SE/CI**，
+  `bootstrap_inference_blocked`（critical）披露全部失败原因；
+- `bootstrap_keep_draws=False` 可不保存 draws（仍计算 Σ）。
+
+### 6.4 单项置信区间
+
+- `ci_method="normal"`（默认）：$\hat\mu_a \pm z_{1-\alpha/2}\sqrt{\hat\Sigma_{aa}}$；
+- `ci_method="percentile"`：保留 draws 的分位数区间，**适用条件**是 bootstrap 分布能近似
+  抽样分布（需在报告中说明）；
+- 排名置信集与两两同时区间属 **Phase 3**（Bonferroni 多重比较校正），单项 CI
+  **不能**代替两两显著性检验。
+
+### 6.5 校验与局限
+
+- `validate_covariance()` 强制：方阵、有限、对称、对角非负、PSD（相对容差），
+  **非 PSD 明确报错、不悄悄修补**；
+- Monte Carlo 校准（`run_se_benchmark` / `scripts/run_se_validation.py`）：
+  比较平均 bootstrap SE 与 $\hat\mu$ 的经验标准差（`se_ratio`），并报告单项 CI 覆盖率与
+  MC 误差 $\sqrt{p(1-p)/R}$；
+- **理论局限**：每轮重拟合 ML nuisance 的非参数 bootstrap，其推断质量依赖算法稳定性与
+  正则条件；覆盖率必须用模拟检验（见 `docs/simulation_protocol.md`），不作通用推断保证；
+  CI 覆盖的是**估计量抽样波动**，不覆盖识别假设违背带来的偏差；
+- 重抽样单位为观测行（iid 假设）；重复客户/聚类结构需要 cluster bootstrap（未实现）。
+
+## 7. 本版本**不**提供（Phase 3 及以后）
+
+- Bonferroni 同时差值区间、可确认优劣关系、排名置信集（Phase 3）；
 - AIPW / double robustness、Overlap Weighting（不同的目标总体！）、PSM、DML；
 - 灵敏度分析（未观测混杂）、cluster bootstrap、max-T/stepdown 排名推断。
 
-`result.se / ci_low / ci_high` 为 `NaN`，`result.covariance / pairwise / ranks` 为 `None`，
-`result.inference_available = False`——不是遗漏，是刻意的阶段边界。
+未启用推断时（`n_bootstrap=None`）：`result.se / ci_low / ci_high` 为 `NaN`，
+`result.covariance / pairwise / ranks` 为 `None`，`result.inference_available = False`；
+启用后 `se/ci/covariance` 填充，`pairwise / ranks` 仍为 `None`（Phase 3）。
 
-## 7. 验证方法（为什么可信）
+## 8. 验证方法（为什么可信）
 
 1. **手算例**：2 Treatment × 4 样本的 Hájek 与 HT 结果与实现逐位吻合（`tests/test_iptw.py`）；
+   已知 draws 的手算协方差与正态 CI（`tests/test_covariance.py`）；
 2. **不变性**（Hypothesis）：组内权重缩放不变、行置换不变、列对齐映射正确；
+   Bootstrap：同种子逐位一致、`n_jobs` 并行与串行一致、每轮重拟合被调用计数验证；
 3. **Oracle 对照**：在已知真值 $e_a(x)$ 的 DGP 上，IPTW 权重使加权 SMD 随 $n$ 下降、
    $\hat\mu_a \to \mu_a$；
 4. **重复实验**：`tests/test_benchmark.py` 与 `scripts/run_simulation.py` 在多种子、
    多样本量下比较 Bias/RMSE（调整前 vs 调整后），偏差随 $n$ 收敛；
+   `run_se_benchmark` / `scripts/run_se_validation.py` 校准 SE 与覆盖率；
 5. **诊断有效性**：弱重叠/强混杂场景触发对应警告与门控降级，而非误报“可靠”。
 
 Monte Carlo 误差按 $\sqrt{\hat p(1-\hat p)/R}$ 报告；有限模拟中 0.946 与 0.95 的差别

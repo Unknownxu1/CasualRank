@@ -44,9 +44,9 @@ jobs:
         if: matrix.python-version == '3.12'
         run: |
           uv run jupyter nbconvert --to notebook --execute --inplace \
-            examples/01_gbm_iptw_from_raw_data.ipynb
-          git diff --exit-code -- examples/01_gbm_iptw_from_raw_data.ipynb || \
-            echo "notebook outputs changed; commit the regenerated notebook"
+            examples/01_gbm_iptw_from_raw_data.ipynb examples/02_joint_bootstrap.ipynb
+          git diff --exit-code -- examples/ || \
+            echo "notebook outputs changed; commit the regenerated notebooks"
 
       - name: Upload test report
         if: always()

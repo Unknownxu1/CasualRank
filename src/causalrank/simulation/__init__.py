@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from .benchmark import (
     BenchmarkResult,
+    SEBenchmarkResult,
     run_estimand_benchmark,
+    run_se_benchmark,
     summarize_benchmark,
     summarize_runs,
 )
@@ -27,12 +29,14 @@ __all__ = [
     "TREATMENT_COL",
     "BenchmarkResult",
     "DGPConfig",
+    "SEBenchmarkResult",
     "SyntheticDGP",
     "SyntheticDataset",
     "get_scenario",
     "make_dataset",
     "make_oracle_frame",
     "run_estimand_benchmark",
+    "run_se_benchmark",
     "scenario_names",
     "summarize_benchmark",
     "summarize_runs",

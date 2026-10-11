@@ -198,8 +198,199 @@ CELLS: list[dict[str, object]] = [
 ]
 
 
-def build() -> None:
-    notebook = {
+CELLS_02: list[dict[str, object]] = [
+    {
+        "cell_type": "markdown",
+        "source": [
+            "# CausalRank — 联合 Bootstrap 协方差与不确定性量化（Phase 2）\n",
+            "\n",
+            "本 Notebook 演示 Phase 2 的统计推断内核：\n",
+            "\n",
+            "1. **联合重抽样**：每轮对同一行索引有放回重抽样（一个索引向量服务全部 Treatment）；\n",
+            "2. **每轮重拟合全部协议**：插补/编码/GBM/折划分/权重/K 组均值全部重跑；\n",
+            "3. 协方差 $\\hat\\Sigma = \\mathrm{np.cov}(draws, rowvar=False, ddof=1)$，\n",
+            "   **绝不**再除以 $n$（每行是完整估计量，不是单客户贡献值）；\n",
+            "4. 单项 CI：正态近似 $\\hat\\mu_a \\pm z_{1-\\alpha/2}\\sqrt{\\hat\\Sigma_{aa}}$；\n",
+            "5. 失败轮（稀有臂被漏抽等）被记录并披露；成功率过低时**阻断推断**；\n",
+            "6. Monte Carlo 校准：bootstrap SE 与真实抽样波动的比较。\n",
+            "\n",
+            "> **排名推断属于 Phase 3**：本 Notebook 不做多重比较校正的两两区间或排名置信集，\n",
+            "> 点估计排序仍不是统计上确立的排名。不确定性只覆盖估计量的抽样波动，\n",
+            "> 不覆盖识别假设被违背带来的偏差。",
+        ],
+    },
+    {
+        "cell_type": "code",
+        "source": [
+            "import numpy as np\n",
+            "import pandas as pd\n",
+            "\n",
+            "from causalrank import CausalRank\n",
+            "from causalrank.simulation import make_dataset\n",
+            "\n",
+            "pd.set_option(\"display.width\", 130)",
+        ],
+    },
+    {
+        "cell_type": "markdown",
+        "source": [
+            "## 1. 启用联合 Bootstrap 的完整分析\n",
+            "\n",
+            "`n_bootstrap=120` 是显式开启推断的开关（默认 `None` 只给点估计，避免无意中跑几分钟）。\n",
+            "研究级配置建议 `n_bootstrap=300` 以上；这里为 Notebook 执行时间取小预算。",
+        ],
+    },
+    {
+        "cell_type": "code",
+        "source": [
+            "ds = make_dataset(\"confounded\", n=2000, random_state=2026)\n",
+            "model = CausalRank(\n",
+            "    treatment=\"treatment\",\n",
+            "    outcome=\"outcome\",\n",
+            "    confounders=[\"x1\", \"x2\", \"x3\", \"x4\"],\n",
+            "    cross_fit=3,\n",
+            "    n_bootstrap=120,\n",
+            "    ci_method=\"normal\",\n",
+            "    n_jobs=1,\n",
+            "    random_state=2026,\n",
+            ")\n",
+            "result = model.fit(ds.df)\n",
+            "print(\"inference_available:\", result.inference_available)\n",
+            "display(result.effects.to_dataframe().round(4))\n",
+            "print({k: v for k, v in result.metadata[\"bootstrap\"].items() if k != \"failure_reasons\"})",
+        ],
+    },
+    {
+        "cell_type": "code",
+        "source": [
+            "est = result.effects.to_dataframe().set_index(\"label\")\n",
+            "check = pd.DataFrame(\n",
+            "    {\n",
+            "        \"mu_hat\": est[\"mu\"],\n",
+            "        \"se\": est[\"se\"],\n",
+            "        \"ci_low\": est[\"ci_low\"],\n",
+            "        \"ci_high\": est[\"ci_high\"],\n",
+            "        \"mu_true\": ds.mu_true,\n",
+            "        \"covered\": (ds.mu_true >= est[\"ci_low\"]) & (ds.mu_true <= est[\"ci_high\"]),\n",
+            "    }\n",
+            ")\n",
+            "display(check.round(4))",
+        ],
+    },
+    {
+        "cell_type": "markdown",
+        "source": [
+            "## 2. 协方差矩阵：联合估计的依赖结构\n",
+            "\n",
+            "非对角元素来自**同一次**重抽样下的联合估计——两臂共享同一批被抽中的客户，\n",
+            "因此 $\\hat\\Sigma_{ij}$ 携带真实的估计相关性。检验相关矩阵与 PSD：",
+        ],
+    },
+    {
+        "cell_type": "code",
+        "source": [
+            "sigma = result.covariance\n",
+            "display(pd.DataFrame(sigma, index=est.index, columns=est.index).round(6))\n",
+            "d = np.sqrt(np.diag(sigma))\n",
+            "corr = sigma / np.outer(d, d)\n",
+            "display(pd.DataFrame(corr, index=est.index, columns=est.index).round(3))\n",
+            "print(\"min eigenvalue:\", float(np.linalg.eigvalsh(sigma).min()))\n",
+            "print(\"SE == sqrt(diag(Sigma)):\", np.allclose(est[\"se\"], d, rtol=1e-10))",
+        ],
+    },
+    {
+        "cell_type": "markdown",
+        "source": [
+            "## 3. 可复现性：同种子逐位一致，且与执行顺序无关\n",
+            "\n",
+            "每轮种子由 `SeedSequence(base_seed).spawn(B)` 派生，同时驱动重抽样与模型随机性；\n",
+            "因此 `n_jobs=2` 并行与单线程结果逐位相同。",
+        ],
+    },
+    {
+        "cell_type": "code",
+        "source": [
+            "small = {\"n_bootstrap\": 12, \"bootstrap_min_successes\": 8}\n",
+            "a = CausalRank(treatment=\"treatment\", outcome=\"outcome\", confounders=[\"x1\", \"x2\", \"x3\", \"x4\"],\n",
+            "               random_state=7, **small).fit(ds.df)\n",
+            "b = CausalRank(treatment=\"treatment\", outcome=\"outcome\", confounders=[\"x1\", \"x2\", \"x3\", \"x4\"],\n",
+            "               random_state=7, **small).fit(ds.df)\n",
+            "c = CausalRank(treatment=\"treatment\", outcome=\"outcome\", confounders=[\"x1\", \"x2\", \"x3\", \"x4\"],\n",
+            "               random_state=7, n_jobs=2, **small).fit(ds.df)\n",
+            "print(\"same seed identical   :\", np.array_equal(a.covariance, b.covariance))\n",
+            "print(\"n_jobs=2 identical    :\", np.array_equal(a.covariance, c.covariance))",
+        ],
+    },
+    {
+        "cell_type": "markdown",
+        "source": [
+            "## 4. 失败轮与推断阻断：稀有 Treatment 的诚实处理\n",
+            "\n",
+            "当某轮重抽样漏掉稀有臂时，该轮**无法**给出完整 K 维向量：记录失败原因并排除，\n",
+            "绝不静默丢弃；成功率低于门槛（默认 90% 且至少 30 轮）时**阻断推断**。",
+        ],
+    },
+    {
+        "cell_type": "code",
+        "source": [
+            "rare = make_dataset(\"rare_treatment\", n=70, random_state=3)\n",
+            "rare_result = CausalRank(\n",
+            "    treatment=\"treatment\",\n",
+            "    outcome=\"outcome\",\n",
+            "    confounders=[\"x1\", \"x2\", \"x3\", \"x4\"],\n",
+            "    n_bootstrap=40,\n",
+            "    bootstrap_min_successes=20,\n",
+            "    bootstrap_min_success_rate=1.0,  # 任何失败都阻断\n",
+            "    random_state=11,\n",
+            ").fit(rare.df)\n",
+            "print(\"inference_available:\", rare_result.inference_available)\n",
+            "print(\"成功/失败轮:\", rare_result.metadata[\"bootstrap\"][\"n_success\"],\n",
+            "      \"/\", rare_result.metadata[\"bootstrap\"][\"n_failed\"])\n",
+            "for w in rare_result.warnings:\n",
+            "    if \"bootstrap\" in w.code:\n",
+            "        print(f\"{w.level:>8} | {w.code:<30} | {w.message[:110]}\")",
+        ],
+    },
+    {
+        "cell_type": "markdown",
+        "source": [
+            "## 5. Monte Carlo 校准：SE 是否对得上真实抽样波动？\n",
+            "\n",
+            "`se_ratio = 平均 bootstrap SE / mu_hat 的经验标准差`；覆盖率同时报告 MC 误差\n",
+            "$\\sqrt{p(1-p)/R}$。研究级脚本：`scripts/run_se_validation.py`（R=24、B=150 的结果\n",
+            "见 `docs/agent_progress.md`）。下面是一个小预算演示：",
+        ],
+    },
+    {
+        "cell_type": "code",
+        "source": [
+            "from causalrank.simulation import run_se_benchmark\n",
+            "\n",
+            "se_res = run_se_benchmark(\"confounded\", n=600, n_replications=6, n_bootstrap=30, random_state=5)\n",
+            "display(se_res.summary.round(3))\n",
+            "print(\"注意：R=6 的 MC 误差很大（coverage 的 MC se 约 0.10），只演示流程不下结论\")",
+        ],
+    },
+    {
+        "cell_type": "markdown",
+        "source": [
+            "## 6. 边界与下一步\n",
+            "\n",
+            "1. CI 覆盖的是**估计量在拟合模型下的抽样波动**，不覆盖未观测混杂等识别假设违背带来的偏差；\n",
+            "2. 重新拟合的非参数 bootstrap + ML nuisance 的理论性质依赖算法稳定性，\n",
+            "   必须用模拟覆盖率检验（上节）而不是当作通用推断保证；\n",
+            "3. 单项 CI **不能**代替两两显著性检验；`ci_method=\"percentile\"` 可选，\n",
+            "   但其适用条件是 bootstrap 分布能近似抽样分布；\n",
+            "4. **Phase 3**：Bonferroni 同时差值区间、可确认优劣关系、保守排名置信集。\n",
+            "\n",
+            "定义与协议见 `docs/methodology.md` 与 `docs/simulation_protocol.md`。",
+        ],
+    },
+]
+
+
+def _notebook(cells: list[dict[str, object]]) -> dict[str, object]:
+    return {
         "cells": [
             {
                 "id": f"cell-{i:02d}",
@@ -212,7 +403,7 @@ def build() -> None:
                     else {}
                 ),
             }
-            for i, cell in enumerate(CELLS)
+            for i, cell in enumerate(cells)
         ],
         "metadata": {
             "kernelspec": {
@@ -225,10 +416,20 @@ def build() -> None:
         "nbformat": 4,
         "nbformat_minor": 5,
     }
-    out = Path(__file__).resolve().parents[1] / "examples" / "01_gbm_iptw_from_raw_data.ipynb"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(notebook, ensure_ascii=False, indent=1), encoding="utf-8")
-    print("wrote", out)
+
+
+def build() -> None:
+    root = Path(__file__).resolve().parents[1] / "examples"
+    root.mkdir(parents=True, exist_ok=True)
+    for filename, cells in (
+        ("01_gbm_iptw_from_raw_data.ipynb", CELLS),
+        ("02_joint_bootstrap.ipynb", CELLS_02),
+    ):
+        out = root / filename
+        out.write_text(
+            json.dumps(_notebook(cells), ensure_ascii=False, indent=1), encoding="utf-8"
+        )
+        print("wrote", out)
 
 
 if __name__ == "__main__":

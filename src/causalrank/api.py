@@ -33,6 +33,7 @@ from .diagnostics.overlap import overlap_diagnostics
 from .diagnostics.weights import weight_diagnostics
 from .estimators.iptw import hajek_estimate
 from .estimators.propensity import fit_propensity
+from .exceptions import CausalRankError
 from .results import CausalRankResult, DiagnosticsReport, EstimatesTable
 from .validation import ValidatedData, validate_dataframe
 
@@ -56,8 +57,12 @@ class CausalRank:
         estimand: str = "population_mean",
         weighting: str = "hajek",
         confidence_level: float = 0.95,
-        n_bootstrap: int = 300,
+        n_bootstrap: int | None = None,
         n_jobs: int = 1,
+        ci_method: str = "normal",
+        bootstrap_keep_draws: bool = True,
+        bootstrap_min_success_rate: float = 0.9,
+        bootstrap_min_successes: int = 30,
         random_state: int | None = None,
         cross_fit: int | None = None,
         clip_propensity: float | None = None,
@@ -86,6 +91,10 @@ class CausalRank:
             confidence_level=confidence_level,
             n_bootstrap=n_bootstrap,
             n_jobs=n_jobs,
+            ci_method=ci_method,
+            bootstrap_keep_draws=bootstrap_keep_draws,
+            bootstrap_min_success_rate=bootstrap_min_success_rate,
+            bootstrap_min_successes=bootstrap_min_successes,
             random_state=random_state,
             cross_fit=cross_fit,
             clip_propensity=clip_propensity,
@@ -180,16 +189,86 @@ class CausalRank:
             ci_high=None,
         )
 
+        # ---- Phase 2: joint re-fitting bootstrap covariance -----------------
+        bootstrap: Any = None
+        covariance: np.ndarray | None = None
+        if config.n_bootstrap is not None:
+            from .inference.bootstrap import joint_bootstrap, normal_ci, percentile_ci
+
+            bootstrap = joint_bootstrap(
+                df=df, config=config, labels=validated.labels, n_bootstrap=config.n_bootstrap
+            )
+            warnings = [*warnings, *bootstrap.warnings]
+            if bootstrap.usable and bootstrap.covariance is not None:
+                covariance = bootstrap.covariance
+                se = np.sqrt(np.clip(np.diag(covariance), 0.0, None))
+                if config.ci_method == "percentile":
+                    if bootstrap.draws is None:  # pragma: no cover - guarded by config
+                        raise CausalRankError(
+                            "ci_method='percentile' requires retained bootstrap draws."
+                        )
+                    ci_low, ci_high = percentile_ci(
+                        bootstrap.draws, config.confidence_level
+                    )
+                else:
+                    ci_low, ci_high = normal_ci(estimate.mu, se, config.confidence_level)
+                effects.se = se
+                effects.ci_low = np.asarray(ci_low, dtype=float)
+                effects.ci_high = np.asarray(ci_high, dtype=float)
+
+        diagnostics = DiagnosticsReport(
+            group_summary=group_summary,
+            weights=weights_df,
+            overlap=overlap_df,
+            balance=balance.detail,
+            balance_summary=balance.summary,
+            warnings=warnings,
+        )
+
         metadata = self._build_metadata(validated, prop_fit, diagnostics)
+        inference_available = covariance is not None
+        metadata["inference_available"] = inference_available
+        metadata["ci_method"] = config.ci_method if inference_available else None
+        if bootstrap is not None:
+            metadata["bootstrap"] = {
+                "n_requested": bootstrap.n_requested,
+                "n_success": bootstrap.n_success,
+                "n_failed": bootstrap.n_failed,
+                "failure_rate": bootstrap.failure_rate,
+                "base_seed": bootstrap.base_seed,
+                "usable": bootstrap.usable,
+                "failure_reasons": [f["reason"] for f in bootstrap.failures[:20]],
+            }
+            metadata["inference_note"] = (
+                "Joint re-fitting bootstrap covariance computed from "
+                f"{bootstrap.n_success}/{bootstrap.n_requested} successful rounds "
+                "(shared row resampling, full protocol re-fitted each round, "
+                "np.cov(draws, rowvar=False, ddof=1))."
+                if inference_available
+                else "Joint bootstrap inference was BLOCKED by the success-rate gates; "
+                "see diagnostics.warnings for the failure reasons."
+            )
+        else:
+            metadata["inference_note"] = (
+                "Joint bootstrap disabled (n_bootstrap=None): point estimates and diagnostics "
+                "only; se/ci are NaN by design."
+            )
+        metadata["causal_caveat"] = (
+            "Interpretation as causal requires consistency, no unmeasured confounding, "
+            "positivity and iid sampling. These assumptions cannot be verified from data; "
+            "the diagnostics only flag empirical problems. Uncertainty quantification covers "
+            "sampling variability of the estimator under the fitted model only — it does not "
+            "cover bias from violated identification assumptions."
+        )
 
         self.result_ = CausalRankResult(
             effects=effects,
             diagnostics=diagnostics,
             metadata=metadata,
-            covariance=None,
+            covariance=covariance,
             pairwise=None,
             ranks=None,
-            inference_available=False,
+            inference_available=inference_available,
         )
         return self.result_
 
@@ -247,15 +326,4 @@ class CausalRank:
             "config": config.to_dict(),
             "quality_gate": diagnostics.gate,
             "n_warnings": len(diagnostics.warnings),
-            "inference_available": False,
-            "inference_note": (
-                "Phase 1 release: point estimates and diagnostics only. Joint bootstrap "
-                "covariance (Phase 2) and rank confidence sets (Phase 3) are not computed; "
-                "se/ci/ranks are NaN/None by design."
-            ),
-            "causal_caveat": (
-                "Interpretation as causal requires consistency, no unmeasured confounding, "
-                "positivity and iid sampling. These assumptions cannot be verified from data; "
-                "the diagnostics only flag empirical problems."
-            ),
         }

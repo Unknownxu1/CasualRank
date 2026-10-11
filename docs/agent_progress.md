@@ -1,8 +1,8 @@
-# Agent 进度报告 — Phase 0 + Phase 1 完成
+# Agent 进度报告 — Phase 0 + Phase 1 + Phase 2 完成
 
-> 日期：2026-10-11 · 规格：`PROJECT_SPEC.md` v0.2（§0–§9 权威）
-> 结论：**Phase 0 与 Phase 1 已完成并通过全部质量检查**；联合 Bootstrap（Phase 2）、
-> 排名推断（Phase 3）按指令未实施，接口已预留。
+> 日期：2026-10-12 · 规格：`PROJECT_SPEC.md` v0.2（§0–§9 权威）
+> 结论：**Phase 0、Phase 1 与 Phase 2 已完成并通过全部质量检查**；排名推断（Phase 3）
+> 按指令未实施，接口已预留。
 
 ---
 
@@ -20,31 +20,36 @@ causalrank/
 ├── src/causalrank/
 │   ├── __init__.py              # 公共导出
 │   ├── _version.py              # 单一版本源（hatch 动态版本）
-│   ├── api.py                   # CausalRank.fit 全流程编排
+│   ├── api.py                   # CausalRank.fit 全流程编排（含 Phase 2 推断集成）
 │   ├── config.py                # CausalRankConfig（含全部门控阈值）+ 校验
 │   ├── exceptions.py            # CausalRankError / CausalRankValidationError
 │   ├── results.py               # EstimatesTable / DiagnosticsReport / CausalRankResult
-│   ├── validation.py            # schema、标签规范化、缺失、分组、dtype、警告
+│   ├── validation.py            # schema、标签规范化、dtype 归一化、缺失、分组、警告
 │   ├── estimators/
 │   │   ├── propensity.py        # 预处理 Pipeline、多分类 GBM、classes_ 对齐、OOF
 │   │   └── iptw.py              # Hájek 主估计器、ESS、HT（内部核对）
+│   ├── inference/
+│   │   └── bootstrap.py         # 联合重拟合 Bootstrap、Σ 校验、normal/percentile CI
 │   ├── diagnostics/
 │   │   ├── weights.py           # 权重分位数、ESS、极端权重、裁剪统计
-│   │   ├── overlap.py           # e_a(x) / e_{T}(X) 分布、低重叠警告
-│   │   └── balance.py           # 数值/类别项 unweighted & weighted SMD
+│   │   ├── overlap.py           # e_a(x)/e_{T}(X) 分布、共同支持检查
+│   │   └── balance.py           # 数值/类别项 unweighted & weighted SMD（数值稳定）
 │   └── simulation/
 │       ├── dgp.py               # 8 场景 DGP + 独立 MC 参考 mu_true
-│       └── benchmark.py         # 重复实验 Bias/RMSE 框架
-├── tests/                       # 97 个测试（详见 §4）
+│       └── benchmark.py         # Bias/RMSE/失败与门控统计 + SE/覆盖率校准
+├── tests/                       # 119 个测试（详见 §4）
 │   ├── conftest.py, __init__.py
 │   ├── test_validation.py  test_propensity.py  test_iptw.py
 │   ├── test_balance.py     test_diagnostics.py test_dgp.py
 │   ├── test_properties.py  test_api.py         test_benchmark.py
+│   ├── test_bootstrap.py   test_covariance.py
 ├── examples/
-│   └── 01_gbm_iptw_from_raw_data.ipynb   # 已执行、含真实输出
+│   ├── 01_gbm_iptw_from_raw_data.ipynb   # 已执行、含真实输出
+│   └── 02_joint_bootstrap.ipynb          # Phase 2：协方差/SE/失败阻断/校准演示
 ├── scripts/
-│   ├── build_notebook.py        # 可复现地生成示例 notebook
-│   ├── run_simulation.py        # 手动研究基准（R=20 级别，含运行级质量统计）
+│   ├── build_notebook.py        # 可复现地生成两个示例 notebook
+│   ├── run_simulation.py        # 研究基准（Bias/RMSE/失败与门控统计）
+│   ├── run_se_validation.py     # 研究基准（SE 校准与覆盖率）
 │   └── repro_issues.py          # 缺陷复现脚本（审查问题的最小复现）
 └── docs/
     ├── implementation_plan.md   # 架构/定义/测试策略/风险（先行计划）
@@ -103,6 +108,17 @@ HT 形式 `(1/n) Σ 1{T_a} Y_i/e_a` 仅内部核对（`horvitz_thompson_estimate
   ddof=1 标准差（分母不受权重影响，Austin 2009）；缺失逐项剔除（不污染均值/方差）；
 - 输出每项跨 pair 的 `max|SMD|`（加权/未加权）与超阈值 pair 数；`s_ref=0` 的边界处理明确。
 
+### 2.5 联合 Bootstrap 协方差（Phase 2）
+
+- 每轮：**同一个**行索引向量重抽样 → 重新执行校验/插补/编码/GBM（含重新折划分）/权重/全部
+  K 组均值，得 `mu^(b)`；
+- `Sigma = np.cov(draws, rowvar=False, ddof=1)`，**不**再除以 n（有测试显式断言）；
+- 种子：`SeedSequence(base_seed).spawn(B)` 逐轮派生，驱动重抽样+模型随机性 →
+  同种子逐位一致、与执行顺序和 `n_jobs` 无关（测试覆盖 n_jobs=2 与串行逐位一致）；
+- 失败轮记录 `{round, seed, reason}` 并排除；成功率 < 0.9 或成功轮 < 30 → 阻断推断；
+- 单项 CI：`normal`（mu ± z·sqrt(Sigma_aa)）或 `percentile`（保留 draws）；
+- `validate_covariance()`：对称/对角非负/PSD 校验，非 PSD 明确报错不修补。
+
 ---
 
 ## 3. 测试：命令与数值结果
@@ -117,13 +133,13 @@ HT 形式 `(1/n) Σ 1{T_a} Y_i/e_a` 仅内部核对（`horvitz_thompson_estimate
 
 | 检查 | 命令 | 结果 |
 |---|---|---|
-| 单元+端到端测试 | `uv run pytest -q` | **97 passed**（约 3 分钟；含 2 个 `slow` 基准测试） |
+| 单元+端到端测试 | `uv run pytest -q` | **119 passed**（约 4 分钟；含 2 个 `slow` 基准测试） |
 | Lint | `uv run ruff check .` | **All checks passed**（对最终目录树实测） |
-| 类型 | `uv run mypy` | **Success: no issues found in 17 source files** |
+| 类型 | `uv run mypy` | **Success: no issues found in 19 source files** |
 | 打包 | `uv build` | `causalrank-0.1.0.tar.gz` + `py3-none-any.whl` 成功 |
 | 干净安装 | 新 venv 安装 wheel 后端到端 `fit` | 通过（`clean install OK 0.1.0`） |
-| Python 3.11 兼容 | 3.11.15 + pandas 3.0.6 venv 安装 wheel 运行 `-m "not slow"` | **95 passed**（慢测试由 CI 执行） |
-| Notebook | `uv run jupyter nbconvert --to notebook --execute` | 全 cell 无错误执行 |
+| Python 3.11 兼容 | 3.11.15 + pandas 3.0.6 venv 安装 wheel 运行 `-m "not slow"` | **95 passed**（Phase 1 基线；CI 覆盖两版本全量） |
+| Notebook | `uv run jupyter nbconvert --to notebook --execute` | 01/02 全 cell 无错误执行 |
 | CI | `.github/workflows/tests.yml` | lint+type+test+build+notebook，3.11/3.12 矩阵（`uv sync --python` 显式指定并打印解释器版本） |
 
 ### 3.2 手算例（独立计算 vs 实现）
@@ -204,6 +220,27 @@ MC 标准误 ≈ 0.00027–0.00028。
 诊断行为与理论一致：残差失衡触发率随 n 从 50% 降到 20%（加权 SMD 均值 0.111→0.080），
 失败率 0%；这些指标正是 Phase 2 Bootstrap 成功率门槛需要的经验依据。
 
+### 4.3 SE 校准与覆盖率（Phase 2，`scripts/run_se_validation.py`）
+
+设置：confounded，n=1200，R=16，B=100，cross_fit=5，`ci_method="normal"`，n_jobs=4
+（耗时约 21 分钟）。真值：`mu_true` = (0.43670, 0.51845, 0.40239)。
+
+| arm | bias | 经验 sd($\hat\mu$) | 平均 bootstrap SE | se_ratio | 95% CI 覆盖率 | 覆盖率 MC se |
+|---|---|---|---|---|---|---|
+| A | −0.0147 | 0.0271 | 0.0253 | **0.93** | 0.875 | 0.083 |
+| B | +0.0168 | 0.0348 | 0.0385 | **1.11** | 1.000 | 0.000 |
+| C | −0.0136 | 0.0346 | 0.0294 | **0.85** | 0.8125 | 0.098 |
+
+结论（按 MC 误差谨慎表述）：
+- `se_ratio` 0.85–1.11：联合 Bootstrap 的 SE 与 $\hat\mu$ 的真实抽样波动吻合在 ±15% 内，
+  协方差校准**没有系统性偏小/偏大**；
+- 覆盖率 0.81–1.00：R=16 时覆盖率的 MC 误差约 0.08–0.10，最低的 0.8125 距名义 0.95
+  约 1.4 个 MC 标准误——**不能**据此断言欠覆盖，也不能宣称精确覆盖；更强的结论需要
+  更大的 R（研究脚本支持，CI 内用 R=16/B=60 的慢测试锁定 0.55 < se_ratio < 1.6、
+  coverage ≥ 0.80 的回归边界）；
+- 快测试与慢测试共同构成 Phase 2 的统计验证门控；`run_se_validation.py` 的更大预算
+  运行（如 R=40/B=200）留作发布前的研究级复核。
+
 ---
 
 ## 5. 诊断输出（Notebook `01`，confounded, n=4000）
@@ -276,37 +313,58 @@ x4 各 level 0.069→0.023 等。**质量门控：PASS（无警告）**——同
 
 ---
 
-## 8. Phase 2 准备情况评估：**就绪**
+## 8. Phase 2 就绪 → 落实情况（本轮完成）
 
 | 准备项 | 现状 |
 |---|---|
-| 单一可重放的估计协议 | `hajek_estimate(y, t_idx, propensity, labels)` 纯函数；预处理+拟合封装在 `fit_propensity()`，可整体在重抽样上调用 |
-| 每轮重拟合全部协议 | `fit_propensity` 内含 Pipeline 构建/折划分/拟合，Bootstrap 只需在重抽样索引上调用同一函数（含 `cross_fit`） |
-| 联合结构 | `IPTWEstimate.mu` 是 K 维向量；`B×K` draws → `np.cov(draws, rowvar=False, ddof=1)` 一步到位，且**不会再除 n**（结构上无法误用） |
-| 随机数可复现并行 | `random_state` 贯穿 config；Phase 2 用 `SeedSequence.spawn` 按轮派生种子（`benchmark.py` 已示范该模式） |
-| 失败轮处理 | 稀有臂/缺类已在 `fit_propensity` 显式报错 → Bootstrap 捕获为失败轮并计入成功率门槛 |
-| 失败/诊断统计 | 基准层已实现 fit 失败捕获（status/error）、门控分布与各警告码触发率（`runs_summary`，R=20 实测失败率 0/40）；Phase 2 的 Bootstrap 成功率门槛可直接复用同一统计模式 |
-| 结果 schema | `se/ci_low/ci_high` 列、`covariance/pairwise/ranks` 字段已就位，Phase 2/3 只需填充 |
-| 配置位 | `n_bootstrap`、`n_jobs`、`confidence_level` 已在 config 与 metadata 中记录 |
-| 验证基础设施 | DGP 真值、benchmark 框架、手算/不变性测试模式可直接复用于 SE/覆盖率验证 |
+| 单一可重放的估计协议 | ✅ `joint_bootstrap` 每轮调用 `fit_propensity` + `hajek_estimate` 纯函数链 |
+| 每轮重拟合全部协议 | ✅ 校验/插补/编码/GBM/折划分全部在每轮内重跑（调用计数测试验证 B 轮 = B 次拟合） |
+| 联合结构 | ✅ `B×K` draws → `np.cov(draws, rowvar=False, ddof=1)`；测试显式断言未除以 n |
+| 随机数可复现并行 | ✅ `SeedSequence(base_seed).spawn(B)`；测试断言 n_jobs=2 与串行逐位一致 |
+| 失败轮处理 | ✅ `{round, seed, reason}` 结构化报告；成功率/轮数门槛触发**推断阻断**（Notebook 02 实测 35/40 → 阻断） |
+| 失败/诊断统计 | ✅ `runs_summary`（失败率、门控分布、告警触发率）+ bootstrap 成功/失败计数 |
+| 结果 schema | ✅ `se/ci_*`、`covariance` 填充；`pairwise/ranks` 保留至 Phase 3 |
+| 配置位 | ✅ `n_bootstrap/n_jobs/confidence_level/ci_method/bootstrap_*` 全部生效 |
+| 验证基础设施 | ✅ 手算 Σ/CI 测试、不变性测试、SE 校准与覆盖率（§4.3） |
 
-**Phase 2 建议顺序**：(1) `inference/bootstrap.py`：单轮重抽样函数 + 索引派生种子 +
-失败轮记录；(2) `Sigma` 对称/PSD/对角线校验（非 PSD 显式报错，不修补）；
-(3) SE / 正态 CI 填充 `EstimatesTable`；(4) Monte Carlo 比较估计 SE 与真实抽样波动；
-(5) Notebook 02 与覆盖率实验。**风险提示**：GBM nuisance + 重拟合 Bootstrap 的理论表现
-依赖算法稳定性，必须用模拟覆盖率检验，不作通用推断保证。
+**Phase 2 交付摘要**：`inference/bootstrap.py`（重抽样/逐轮种子/失败记录）、
+`validate_covariance`（非 PSD 显式报错不修补）、SE/normal+percentile CI 填充
+`EstimatesTable`、`run_se_benchmark` SE/覆盖率校准、Notebook `02_joint_bootstrap.ipynb`
+（含推断阻断实测演示）。**已知风险**（保留声明）：GBM nuisance + 重拟合 Bootstrap 的
+理论表现依赖算法稳定性，覆盖率以模拟检验为准（§4.3），不作通用推断保证。
 
 ---
 
-## 9. 复现方式
+## 9. Phase 3 准备情况评估：**就绪**
+
+| 准备项 | 现状 |
+|---|---|
+| 联合协方差 | ✅ `result.covariance`（K×K，标签规范序）已可直接用于差值 SE $\sqrt{\Sigma_{ii}+\Sigma_{jj}-2\Sigma_{ij}}$ |
+| 相关性结构 | ✅ 非对角元素来自联合估计（Notebook 02 实测相关矩阵；手算差值 SE 测试已覆盖公式） |
+| 显著性判定素材 | ✅ `result.effects` 提供 `mu/se/ci`；两两同时区间需加 Bonferroni 因子 $z_{1-\alpha/(2M)}$，$M=K(K-1)/2$ |
+| 并列处理 | ⏳ 需定义 tie convention（规格 3.6）：真实并列下严格全序不唯一，点估计并列须显式标记 |
+| 多重比较 | ⏳ `inference/pairwise.py`、`inference/ranking.py` 待建；`result.pairwise/ranks` 字段已就位 |
+| 验证素材 | ✅ `close_effects`/`equal_effects` 场景与联合覆盖率统计框架可直接复用 |
+
+**Phase 3 建议顺序**：(1) `inference/pairwise.py`：Bonferroni 同时差值区间 + 方向判定；
+(2) `inference/ranking.py`：$[1+B_i,\, K-W_i]$ 保守排名区间 + 并列约定；
+(3) 不变性测试（Treatment 重排、共同平移）与 K=2 退化检验；
+(4) `equal_effects` 场景验证“不得凭噪声宣称确定排名”；(5) Notebook 03 + 最终排名覆盖率基准。
+**红线**：不以差异不显著作为效果相等的证据；不把 Bootstrap 第一频次当最优概率；
+单项 CI 重叠不代替显著性检验。
+
+---
+
+## 10. 复现方式
 
 ```bash
 uv sync                              # 安装 runtime + dev 依赖
-uv run pytest -q                     # 97 tests
+uv run pytest -q                     # 119 tests
 uv run ruff check . && uv run mypy   # 静态检查
 uv build                             # 打包检查
 uv run jupyter nbconvert --to notebook --execute --inplace examples/01_gbm_iptw_from_raw_data.ipynb
 uv run python scripts/run_simulation.py --scenario confounded --n 1500 6000 --replications 20 --cross-fit 5
+uv run python scripts/run_se_validation.py --scenario confounded --n 1200 --replications 16 --bootstrap 100 --cross-fit 5 --n-jobs 4
 ```
 
 环境：Python 3.11/3.12（本地验证 3.12.7）、numpy 2.x、pandas 2.x、scipy 1.x、

@@ -101,3 +101,28 @@ def test_run_diagnostics_capture_gates_and_warnings() -> None:
     warn_cols = [c for c in rs.columns if c.startswith("warn_")]
     assert warn_cols, "expected warning trigger-rate columns for weak_overlap"
     assert any(float(rs[c].iloc[0]) > 0 for c in warn_cols)
+
+
+@pytest.mark.slow
+def test_bootstrap_se_matches_empirical_variability() -> None:
+    """Phase 2 gate: bootstrap SEs must track the real sampling variability.
+
+    ``se_ratio = mean_se / empirical_sd`` over replications; a value far from 1
+    means the covariance is miscalibrated. The tolerance reflects both Monte
+    Carlo error (R is small by design) and the known variability of bootstrap
+    SEs — a tighter claim would not survive the simulation noise.
+    """
+    from causalrank.simulation import run_se_benchmark
+
+    res = run_se_benchmark(
+        "confounded", n=800, n_replications=16, n_bootstrap=60, random_state=2026
+    )
+    summary = res.summary
+    assert (summary["n_replications"] == 16).all()
+    ratio = summary["se_ratio"].to_numpy(dtype=float)
+    assert np.all(ratio > 0.55), summary
+    assert np.all(ratio < 1.6), summary
+    # nominal 95% CI: coverage must be reasonably close given MC error
+    coverage = summary["coverage"].to_numpy(dtype=float)
+    assert np.all(coverage >= 0.80), summary
+    assert np.all(coverage <= 1.0), summary

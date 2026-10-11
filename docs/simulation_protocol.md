@@ -52,12 +52,13 @@ $$\mu_{\mathrm{true}}[a] = E_X\big[P(Y(a)=1\mid X)\big] \approx \frac{1}{N_{\mat
 
 - `Bias(mu_a)`、RMSE、跨重复实验标准差；原始组均值的同名指标（对照）；
 - 平均 ESS、SMD、极端权重警告触发率（诊断有效性）；
-- 拟合失败率、（Phase 2 起）Bootstrap 成功率；
+- 拟合失败率、Bootstrap 成功率（逐轮 `status/error` 记录）；
+- **SE 校准**（`run_se_benchmark`）：`se_ratio = 平均 bootstrap SE / mu_hat 经验标准差`；
+  单项 CI **覆盖率**与 MC 误差 $\sqrt{\hat p(1-\hat p)/R}$；
 - 运行时长与可复现性（固定种子逐位一致）。
 
-覆盖率类指标（单项 CI 覆盖、Bonferroni 联合排名覆盖）在 Phase 2/3 引入推断后统计；
-届时必须同时报告 Monte Carlo 误差 $\sqrt{\hat p(1-\hat p)/R}$，不得因 0.946 vs 0.95
-就断定方法失效。
+Bonferroni **联合排名覆盖**率在 Phase 3 引入排名推断后统计；届时同样必须报告
+Monte Carlo 误差，不得因 0.946 vs 0.95 就断定方法失效。
 
 ## 5. 快测试 vs 研究基准
 
@@ -68,9 +69,14 @@ $$\mu_{\mathrm{true}}[a] = E_X\big[P(Y(a)=1\mid X)\big] \approx \frac{1}{N_{\mat
 ```bash
 uv run python scripts/run_simulation.py --scenario confounded --n 1500 6000 \
     --replications 20 --cross-fit 5 --out artifacts/benchmark_confounded.csv
+
+uv run python scripts/run_se_validation.py --scenario confounded --n 1200 \
+    --replications 24 --bootstrap 150 --cross-fit 5 --n-jobs 4 \
+    --out artifacts/se_validation.csv
 ```
 
-  输出逐重复表与汇总表（bias / RMSE / raw 对照 / 平均 ESS），并记录真值参考参数。
+  前者输出逐重复表、臂级 Bias/RMSE 与运行级失败率/门控/告警触发率；
+  后者输出 `se_ratio`（bootstrap SE vs 经验标准差）与 CI 覆盖率（含 MC 误差）。
 
 ## 6. 已知的验证局限
 

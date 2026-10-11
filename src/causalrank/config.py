@@ -18,6 +18,7 @@ SUPPORTED_ESTIMANDS: tuple[str, ...] = ("population_mean",)
 SUPPORTED_WEIGHTING: tuple[str, ...] = ("hajek",)
 SUPPORTED_NUMERIC_IMPUTE: tuple[str, ...] = ("median", "mean", "constant")
 SUPPORTED_CATEGORICAL_IMPUTE: tuple[str, ...] = ("most_frequent", "constant")
+SUPPORTED_CI_METHODS: tuple[str, ...] = ("normal", "percentile")
 
 _DEFAULT_GBM_PARAMS: dict[str, Any] = {
     # Deliberately regularised defaults: for propensity scores we want a smooth
@@ -58,10 +59,19 @@ class CausalRankConfig:
     estimand: str = "population_mean"
     weighting: str = "hajek"
 
-    # --- inference scaffolding (used from Phase 2 onward) ---
+    # --- inference (Phase 2: joint bootstrap) ---
+    # ``n_bootstrap`` enables the joint re-fitting bootstrap. It defaults to
+    # None (point estimates + diagnostics only) because every bootstrap round
+    # re-runs the full propensity fit: a 300-round bootstrap turns a seconds-
+    # long fit into minutes. Pass n_bootstrap=300 (or any >= 1) to obtain
+    # covariance / SE / CI — this is an explicit opt-in, never implicit.
     confidence_level: float = 0.95
-    n_bootstrap: int = 300
+    n_bootstrap: int | None = None
     n_jobs: int = 1
+    ci_method: str = "normal"
+    bootstrap_keep_draws: bool = True
+    bootstrap_min_success_rate: float = 0.9
+    bootstrap_min_successes: int = 30
 
     # --- randomness ---
     random_state: int | None = None
@@ -138,8 +148,30 @@ class CausalRankConfig:
 
         if not (0.0 < float(self.confidence_level) < 1.0):
             raise CausalRankValidationError("confidence_level must lie in (0, 1).")
-        if int(self.n_bootstrap) < 1:
-            raise CausalRankValidationError("n_bootstrap must be >= 1.")
+        if self.n_bootstrap is not None:
+            if not isinstance(self.n_bootstrap, int) or isinstance(self.n_bootstrap, bool):
+                raise CausalRankValidationError("n_bootstrap must be an int or None.")
+            if self.n_bootstrap < 1:
+                raise CausalRankValidationError("n_bootstrap must be >= 1 or None to disable.")
+            if self.n_bootstrap < self.bootstrap_min_successes:
+                raise CausalRankValidationError(
+                    f"n_bootstrap={self.n_bootstrap} is below bootstrap_min_successes="
+                    f"{self.bootstrap_min_successes}; inference would be blocked by design. "
+                    "Raise n_bootstrap or lower bootstrap_min_successes explicitly."
+                )
+        if self.ci_method not in SUPPORTED_CI_METHODS:
+            raise CausalRankValidationError(
+                f"ci_method must be one of {SUPPORTED_CI_METHODS}."
+            )
+        if self.ci_method == "percentile" and not self.bootstrap_keep_draws:
+            raise CausalRankValidationError(
+                "ci_method='percentile' requires bootstrap_keep_draws=True "
+                "(percentile intervals are computed from the retained draws)."
+            )
+        if not (0.0 < float(self.bootstrap_min_success_rate) <= 1.0):
+            raise CausalRankValidationError("bootstrap_min_success_rate must lie in (0, 1].")
+        if int(self.bootstrap_min_successes) < 2:
+            raise CausalRankValidationError("bootstrap_min_successes must be >= 2.")
         if int(self.n_jobs) < 1:
             raise CausalRankValidationError("n_jobs must be >= 1.")
         if self.random_state is not None and not isinstance(self.random_state, int):

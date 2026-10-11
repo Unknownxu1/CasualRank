@@ -28,6 +28,7 @@ dependencies = [
   "pandas>=2.0",
   "scipy>=1.11",
   "scikit-learn>=1.4",
+  "joblib>=1.3",
 ]
 
 [project.urls]
@@ -81,10 +82,12 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["E731", "B011"]
-# scripts/build_notebook.py embeds Chinese notebook text; full-width punctuation
-# there is intentional typography, not an accidental look-alike character.
+# scripts/build_notebook.py embeds Chinese notebook text and examples/*.ipynb
+# contain Chinese user-facing strings; full-width punctuation there is
+# intentional typography, not an accidental look-alike character.
 # RUF001 stays active for src/ and tests/ where all strings are ASCII/English.
 "scripts/*" = ["RUF001"]
+"examples/*" = ["RUF001", "C408"]
 
 [tool.mypy]
 python_version = "3.11"

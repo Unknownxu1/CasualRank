@@ -81,7 +81,8 @@ def test_summary_states_missing_inference() -> None:
     ds = make_dataset("randomized", n=600, random_state=6)
     result = _fit(ds.df)
     text = result.summary()
-    assert "NOT available in Phase 1" in text
+    assert "NOT available in this result" in text
+    assert "n_bootstrap" in text
     assert "mu_a = E[Y(a)]" in text
     assert "quality gate" in text
     assert result.to_json()  # machine-readable dump works

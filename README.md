@@ -4,11 +4,12 @@
 uncertainty quantification, and statistically defensible treatment ranking from
 observational data.**
 
-> **当前状态：Phase 0 + Phase 1（v0.1.0-alpha）。**
-> 已实现：原始 DataFrame → 多分类 GBM 倾向得分 → Hájek IPTW → 全部 Treatment 的调整后
-> 平均潜在结果估计 + 重叠 / ESS / SMD 诊断与质量门控。
-> **尚未实现（Phase 2/3）**：联合 Bootstrap 协方差、标准误 / 置信区间、排名置信集。
-> 本版本返回的 `se / ci / ranks` 为空，且 `result.inference_available is False`。
+> **当前状态：Phase 0–2（v0.2.0）。**
+> 已实现：原始 DataFrame → 多分类 GBM 倾向得分 → Hájek IPTW → `mu_a = E[Y(a)]` 估计
+> + 重叠 / ESS / SMD 诊断与质量门控；**联合 Bootstrap 协方差、SE / 单项 CI**
+> （`n_bootstrap` 显式开启）；失败轮披露与推断阻断；SE/覆盖率 Monte Carlo 校准。
+> **尚未实现（Phase 3+）**：两两同时区间、可确认优劣关系、排名置信集
+> （`result.ranks / pairwise` 为 None）。请勿把点估计排序当作已确立的统计排名。
 
 ---
 
@@ -48,7 +49,7 @@ uv build                # 打包检查
 uv pip install -e .      # 或 pip install -e .
 ```
 
-## Quickstart（Phase 1）
+## Quickstart
 
 ```python
 import pandas as pd
@@ -61,26 +62,30 @@ model = CausalRank(
     treatment="route",
     outcome="converted",
     confounders=["age", "income", "gender", "previous_visits"],
-    estimator="iptw",            # Phase 1 仅支持 IPTW
+    estimator="iptw",            # Phase 1/2 支持 IPTW
     propensity_model="gbm",      # 倾向得分预测模型（多分类 GBM）
     estimand="population_mean",  # mu_a = E[Y(a)]，同一目标总体
     weighting="hajek",           # 组内归一化 IPTW（不改变估计目标）
     cross_fit=5,                 # 可选：out-of-fold 倾向得分
     confidence_level=0.95,
-    n_bootstrap=300,             # Phase 2 起生效
+    n_bootstrap=300,             # >= 1 显式开启联合 Bootstrap 推断（SE/CI）
     random_state=2026,
 )
 result = model.fit(df)
 
-print(result.summary())              # 估计值、诊断与质量门控（无推断量）
-print(result.effects.to_dataframe()) # mu_a、原始均值、权重、ESS
+print(result.summary())              # 估计值、SE/CI、诊断与质量门控
+print(result.effects.to_dataframe()) # mu_a、se、ci、原始均值、权重、ESS
+print(result.covariance)             # K×K 联合 Bootstrap 协方差
 print(result.diagnostics.summary())  # overlap / 权重 / SMD 诊断
 for w in result.diagnostics.warnings:
     print(w.level, w.code, w.message)
 ```
 
-低层排名内核（Phase 3 才提供）与联合 Bootstrap（Phase 2）将在后续阶段开放；
-当前版本用于**验证估计器本身**：估计定义、诊断与模拟基准。
+`n_bootstrap` 是**显式开关**：默认 `None` 只输出点估计与诊断（秒级）；设为 300 会每轮
+重新拟合全部协议来估计协方差（分钟级，可 `n_jobs` 并行且结果与串行逐位一致）。
+
+低层排名内核（Phase 3 才提供）将在后续阶段开放。当前版本用于**验证估计器与不确定性
+量化本身**：估计定义、诊断、模拟基准与 SE/覆盖率校准。
 
 ## 估计方法（一句话版）
 

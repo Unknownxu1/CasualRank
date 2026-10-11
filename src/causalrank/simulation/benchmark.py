@@ -222,6 +222,130 @@ def summarize_benchmark(replications: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(out)
 
 
+def run_se_benchmark(
+    scenario: str | DGPConfig = "confounded",
+    n: int = 2_000,
+    n_replications: int = 20,
+    n_bootstrap: int = 200,
+    random_state: int = 2026,
+    cross_fit: int | None = None,
+    ci_method: str = "normal",
+    confidence_level: float = 0.95,
+    n_jobs: int = 1,
+) -> SEBenchmarkResult:
+    """Compare bootstrap SEs with the empirical sampling variability of ``mu_hat``.
+
+    For each replication the full pipeline runs *with* the joint bootstrap, so
+    every replication yields ``mu_hat``, ``se_hat`` and a pointwise CI. The
+    summary reports, per arm:
+
+    * ``empirical_sd`` — sd of ``mu_hat`` across replications (the real sampling
+      variability at this ``n``);
+    * ``mean_se`` and ``se_ratio = mean_se / empirical_sd`` — the calibration of
+      the bootstrap covariance;
+    * ``coverage`` of the nominal CI for ``mu_true`` with its Monte Carlo error
+      ``sqrt(p(1-p)/R)``.
+
+    This is the Phase 2 validation gate for the uncertainty quantification: a
+    badly calibrated SE (ratio far from 1) or under-covering CI must be reported
+    as a limitation, not hidden behind a plausible-looking interval.
+    """
+    config = get_scenario(scenario) if isinstance(scenario, str) else scenario
+    dgp = SyntheticDGP(config)
+    mu_true, _ = dgp.population_mean()
+
+    root = np.random.SeedSequence(int(random_state))
+    seeds = [int(np.asarray(c.generate_state(1))[0]) for c in root.spawn(int(n_replications))]
+
+    rows: list[dict[str, Any]] = []
+    for rep, seed in enumerate(seeds):
+        df = dgp.sample(int(n), random_state=seed)
+        model = CausalRank(
+            treatment=TREATMENT_COL,
+            outcome=OUTCOME_COL,
+            confounders=list(CONFOUNDER_COLS),
+            random_state=seed,
+            cross_fit=cross_fit,
+            n_bootstrap=int(n_bootstrap),
+            ci_method=ci_method,
+            confidence_level=confidence_level,
+            n_jobs=n_jobs,
+        )
+        result = model.fit(df)
+        est = result.effects.to_dataframe().set_index("label")
+        for a, label in enumerate(config.labels):
+            truth = float(mu_true[a])
+            lo = float(est.loc[label, "ci_low"])
+            hi = float(est.loc[label, "ci_high"])
+            rows.append(
+                {
+                    "scenario": config.name,
+                    "n": int(n),
+                    "replication": rep,
+                    "seed": seed,
+                    "label": label,
+                    "mu_true": truth,
+                    "mu_hat": float(est.loc[label, "mu"]),
+                    "se_hat": float(est.loc[label, "se"]),
+                    "ci_low": lo,
+                    "ci_high": hi,
+                    "covers": bool(lo <= truth <= hi),
+                    "inference_available": bool(result.inference_available),
+                    "bootstrap_success_rate": float(
+                        result.metadata.get("bootstrap", {}).get("failure_rate", np.nan)
+                    ),
+                }
+            )
+
+    replications = pd.DataFrame(rows)
+    summary_rows: list[dict[str, Any]] = []
+    for label, grp in replications.groupby("label", sort=True):
+        ok = grp[grp["inference_available"]]
+        mu_hat = ok["mu_hat"].to_numpy(dtype=float)
+        empirical_sd = float(np.std(mu_hat, ddof=1)) if mu_hat.size > 1 else np.nan
+        mean_se = float(ok["se_hat"].mean())
+        p = float(ok["covers"].mean()) if not ok.empty else np.nan
+        mc_se = float(np.sqrt(p * (1 - p) / max(ok.shape[0], 1))) if ok.shape[0] else np.nan
+        summary_rows.append(
+            {
+                "scenario": config.name,
+                "n": int(n),
+                "label": label,
+                "n_replications": int(ok.shape[0]),
+                "mu_true": float(grp["mu_true"].iloc[0]),
+                "bias": float(mu_hat.mean() - grp["mu_true"].iloc[0]) if mu_hat.size else np.nan,
+                "empirical_sd": empirical_sd,
+                "mean_se": mean_se,
+                "se_ratio": mean_se / empirical_sd if empirical_sd else np.nan,
+                "coverage": p,
+                "coverage_mc_se": mc_se,
+                "ci_method": ci_method,
+                "n_bootstrap": int(n_bootstrap),
+            }
+        )
+    return SEBenchmarkResult(
+        replications=replications,
+        summary=pd.DataFrame(summary_rows),
+        scenario=config.name,
+        n=int(n),
+        n_bootstrap=int(n_bootstrap),
+    )
+
+
+@dataclass
+class SEBenchmarkResult:
+    """SE calibration: replication rows plus a per-arm summary."""
+
+    replications: pd.DataFrame
+    summary: pd.DataFrame
+    scenario: str
+    n: int
+    n_bootstrap: int
+
+    def __str__(self) -> str:  # pragma: no cover - convenience
+        return f"SEBenchmarkResult(scenario={self.scenario!r}, n={self.n}):\n{self.summary}"
+
+
 def summarize_runs(runs: pd.DataFrame) -> pd.DataFrame:
     """Run-level quality statistics per (scenario, n).
 

@@ -174,7 +174,7 @@ def test_weak_overlap_scenario_triggers_quality_gate() -> None:
     # the summary must not claim a reliable causal ranking
     text = result.summary()
     assert "reliable causal ranking" not in text
-    assert "NOT available in Phase 1" in text
+    assert "NOT available in this result" in text
 
 
 def test_group_summary_reports_raw_counts_and_means() -> None:

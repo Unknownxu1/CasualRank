@@ -193,7 +193,7 @@ class CausalRankResult:
         show = est[["label", "n_treated", "raw_mean", "mu", "se", "ci_low", "ci_high", "ess"]]
         lines: list[str] = []
         lines.append("==============================================================")
-        lines.append(" CausalRank result — Phase 1 (point estimates + diagnostics)")
+        lines.append(" CausalRank result — estimates, uncertainty (if enabled) & diagnostics")
         lines.append("==============================================================")
         lines.append(
             f"estimand : mu_a = E[Y(a)] over the sample population "
@@ -210,14 +210,24 @@ class CausalRankResult:
         lines.append("-- estimates (mu_a = E[Y(a)], common target population) --")
         lines.append(show.to_string(index=False))
         lines.append("")
-        if not self.inference_available:
+        if self.inference_available:
+            se_note = self.metadata.get("inference_note", "")
+            lines.append(f"uncertainty: {se_note}")
             lines.append(
-                "!! uncertainty quantification is NOT available in Phase 1: se / ci / ranks are\n"
-                "!! NaN by design. Joint bootstrap covariance (Phase 2) and multiple-comparison\n"
-                "!! rank confidence sets (Phase 3) are not implemented in this release.\n"
-                "!! Do not read point-estimate ordering as a statistically established ranking."
+                "!! these intervals cover sampling variability of the estimator under the\n"
+                "!! fitted model ONLY. Rank confidence sets and multiplicity-adjusted pairwise\n"
+                "!! comparisons are Phase 3 and are NOT computed here — do not read the\n"
+                "!! point-estimate ordering as a statistically established ranking."
             )
-            lines.append("")
+        else:
+            lines.append(
+                "!! uncertainty quantification is NOT available in this result: se / ci / ranks\n"
+                "!! are NaN by design (set n_bootstrap >= 1 to enable the joint re-fitting\n"
+                "!! bootstrap; if inference was blocked, see diagnostics.warnings for the\n"
+                "!! failure reasons). Do not read point-estimate ordering as a statistically\n"
+                "!! established ranking."
+            )
+        lines.append("")
         lines.append(self.diagnostics.summary())
         return "\n".join(lines)
 
