@@ -187,3 +187,48 @@ Monte Carlo 误差按 `sqrt(p(1-p)/R)` 报告；快测试与研究基准分开�
      使 `equal_effects` 下的假确认直接表现为失覆盖。
   6. `result.ranks` 提供 `to_dataframe()`（规格 2.1 用户故事）；公式、`z_crit`、
      置信水平、tie 约定随结果对象输出（可追溯性验收项）。
+
+## 9. Phase 4 实施计划（分发与可视化）— 已完成
+
+> 依据规格 §6 Phase 4：报告展示各臂估计值/SE/CI/排名置信集/两两优势关系，
+> Overlap/ESS/SMD/Bootstrap 诊断分开展示，导出**静态 HTML**（不搭 React/Streamlit 服务器）；
+> 验收 = 干净环境安装后从 CSV 运行示例并生成 HTML，且报告数值全部可追溯到 result 对象。
+
+### 9.1 范围
+
+1. `src/causalrank/visualization/report.py`：`render_html(result)` / `save_html(result, path)` /
+   `plot_result(result, kind)` + `Figure`（Jupyter `_repr_html_`，可存 SVG/HTML）。
+2. `CausalRankResult.to_html(path=None)` 与 `result.plot(kind)`（规格 2.1 用户故事的
+   `result.plot()` / `result.to_html("report.html")`）。
+3. 内联 SVG 图（纯 stdlib，零新依赖）：`estimates`（森林图 mu±CI）、`ranks`（排名区间）、
+   `balance`（加权前后 |SMD|）、`ess`（n vs ESS）、`overlap`（e_arm 分位区间）。
+4. 示例 Notebook `04_html_report.ipynb`（CSV 往返 → fit → HTML → 图 → 阻断推断的诚实报告）；
+   CI notebook 执行清单加 04。
+5. 文档：`docs/api.md`（2.6 节）、README Quickstart、`docs/agent_progress.md` Phase 4 节；
+   版本 bump 0.4.0。
+
+### 9.2 关键取舍
+
+1. **零新依赖**：规格允许 Plotly 作“附加报告功能”，但静态 HTML + 内联 SVG 已满足
+   验收且不增加安装体积与供应链面；不引入 matplotlib/plotly/JS 服务。
+2. **可追溯性是硬约束**：渲染器只读 result 对象（effects/diagnostics/covariance/
+   pairwise/ranks/metadata），不重拟合、不重算统计量；表格数字用固定格式化规则
+   （mu/se/CI 4 位小数，NaN → —），并用测试断言 result 的每个 mu 值出现在 HTML 中。
+3. **诚实形态随数字同行**：质量门控横幅、结构化警告、推断阻断/未启用状态、
+   Bonferroni 公式、tie 约定、`inconclusive ≠ 相等`、`点排名 ≠ 最优概率`、
+   因果识别免责声明全部进报告——报告不能比 result 对象更“干净”。
+4. **确定性**：报告不含渲染时刻的本地时间，时间戳取 `metadata["created_at"]`；
+   同一 result 两次渲染逐字节一致（有测试）。
+5. **安全**：所有标签/警告文本经 `html.escape`；报告零 `<script>`、零外部资源
+   （有测试），`.svg` 落盘可独立打开。
+
+### 9.3 测试
+
+| 层 | 内容 |
+|---|---|
+| 可追溯 | 每个 mu/se/CI 值、标签、警告码、版本号出现在 HTML；covariance/pairwise/ranks 表可核对 |
+| 状态 | 推断未启用 / 推断被阻断 / 正常推断三种形态的报告章节正确 |
+| 安全 | 含 `<script>`/`&` 的 Treatment 标签被转义；无外部资源引用 |
+| 图 | 5 种 kind 的 SVG 均可生成；未知 kind 报明确错误；ranks 未推断时报错 |
+| 文件 | `to_html(path)` 落盘且内容一致；`Figure.save` 可存 `.svg`/`.html` |
+| 确定性 | 同 result 两次渲染逐字节一致 |

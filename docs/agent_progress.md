@@ -1,9 +1,10 @@
-# Agent 进度报告 — Phase 0–3 完成（MVP）
+# Agent 进度报告 — Phase 0–4 完成
 
 > 日期：2026-10-12 · 规格：`PROJECT_SPEC.md` v0.2（§0–§9 权威）
-> 结论：**Phase 0–3 已完成并通过全部质量检查（MVP 达成）**：原始数据 → GBM 多分类倾向
-> 得分 → Hájek IPTW → 联合 Bootstrap 协方差 → Bonferroni 两两同时区间 → 保守排名置信集。
-> 仅剩 Phase 4（报告可视化与分发）与后续研究扩展（max-T/stepdown、AIPW/OW 等）。
+> 结论：**Phase 0–4 已完成**：原始数据 → GBM 多分类倾向得分 → Hájek IPTW →
+> 联合 Bootstrap 协方差 → Bonferroni 两两同时区间 → 保守排名置信集 →
+> **静态 HTML 报告与 SVG 图（Phase 4）**。
+> 剩余为规格 §6 的后续研究扩展（max-T/stepdown、AIPW/OW、cluster bootstrap 等）。
 
 ---
 
@@ -66,8 +67,8 @@ causalrank/
     └── agent_progress.md        # 本文件
 ```
 
-**未创建（按指令刻意排除）**：`visualization/report.py`（Phase 4）；
-max-T/stepdown 排名推断、AIPW/OW、cluster bootstrap 等属后续研究扩展（规格 §6）。
+**未创建（按指令刻意排除）**：max-T/stepdown 排名推断、AIPW/OW、cluster bootstrap
+等属后续研究扩展（规格 §6）；`visualization/` 已于 Phase 4 落地（见 §11）。
 
 ---
 
@@ -390,7 +391,7 @@ uv run ruff check . && uv run mypy   # 静态检查
 uv build                             # 打包检查
 uv run jupyter nbconvert --to notebook --execute --inplace \
   examples/01_gbm_iptw_from_raw_data.ipynb examples/02_joint_bootstrap.ipynb \
-  examples/03_causal_ranking.ipynb
+  examples/03_causal_ranking.ipynb examples/04_html_report.ipynb
 uv run python scripts/run_simulation.py --scenario confounded --n 1500 6000 --replications 20 --cross-fit 5
 uv run python scripts/run_se_validation.py --scenario confounded --n 1200 --replications 16 --bootstrap 100 --cross-fit 5 --n-jobs 4
 uv run python scripts/run_rank_validation.py --scenario equal_effects --n 1200 --replications 20 --bootstrap 100 --cross-fit 5
@@ -398,3 +399,56 @@ uv run python scripts/run_rank_validation.py --scenario equal_effects --n 1200 -
 
 环境：Python 3.11/3.12（本地验证 3.12.7）、numpy 2.x、pandas 2.x、scipy 1.x、
 scikit-learn ≥1.4（本地 1.9.1）；版本自动记录于 `result.metadata["versions"]`。
+
+---
+
+## 11. Phase 4 落实情况（本轮完成：分发与可视化）
+
+### 11.1 交付物
+
+| 交付 | 位置 |
+|---|---|
+| 静态 HTML 渲染器 | `src/causalrank/visualization/report.py`：`render_html` / `save_html` / `plot_result` / `Figure` |
+| 结果对象集成 | `CausalRankResult.to_html(path=None, title=...)`、`CausalRankResult.plot(kind)`（规格 2.1 用户故事的 `result.plot()` / `result.to_html("report.html")`） |
+| 5 种内联 SVG 图 | `estimates`（森林图 mu±CI）、`ranks`（`[1+B_i, K-W_i]` 区间图）、`balance`（加权前后 max \|SMD\| + 阈值线）、`ess`（n vs ESS）、`overlap`（各臂 e_arm 覆盖范围） |
+| 示例 Notebook | `examples/04_html_report.ipynb`（CSV 往返 → fit → HTML → 5 图 → 无推断诚实报告），CI 执行清单已加 04 |
+| 文档 | `docs/api.md` §2.6、`docs/implementation_plan.md` §9、README Quickstart（`to_html` / `plot`） |
+| 版本 | 0.4.0（`src/causalrank/_version.py`） |
+
+### 11.2 关键取舍
+
+1. **零新依赖**：规格允许 Plotly 作为附加报告功能，但静态 HTML + 内联 SVG 已满足
+   Phase 4 验收（“导出静态 HTML，不必搭建 React、Streamlit 服务器”）且不增加安装体积；
+   matplotlib/plotly/JS 均不引入。数字 API 仍不依赖任何绘图库（规格 2.3）。
+2. **可追溯性是硬约束**：渲染器只读 result 对象，不重拟合、不重算；表格与数值 API
+   用同一套格式化（mu/se/CI 4 位小数、非有限值 → `—`）；测试断言每个 mu/se/CI 值、
+   协方差元素、z_crit、标签、警告码、版本号都出现在 HTML 中。
+3. **诚实形态随数字同行**：质量门控横幅（pass/caution/fail 三色）、结构化警告、
+   推断未启用（`n_bootstrap=None`）与推断被阻断（成功率门槛）两种状态各自渲染显式说明，
+   Bonferroni 公式、tie 约定、`inconclusive ≠ 相等`、`点排名 ≠ 最优概率`、
+   因果识别免责声明、`AUC 非证据`红线全部进报告。
+4. **确定性与安全**：报告不含渲染时刻时钟（时间戳取 `metadata["created_at"]`），
+   同一 result 两次渲染逐字节一致（有测试）；所有标签/警告文本经 `html.escape`；
+   零 `<script>`、零外部资源引用（有测试）；`.svg` 落盘可独立打开。
+
+### 11.3 测试（`tests/test_report.py`，28 项）
+
+| 组 | 覆盖 |
+|---|---|
+| `TestTraceability` | 每个 mu/se/CI 值出现在 HTML；协方差 K×K 元素 6 位小数可核对；rank 区间、diff、z_crit、版本号、标签、警告文案 |
+| `TestHonestStates` | 推断未启用 → “Not available” + NaN 渲染为 `—`；门控横幅；红线文案；三组公式 |
+| `TestSafetyAndDeterminism` | 无 script/img/@import/url()；两次渲染逐字节一致；`<b>A</b>`、`B & C` 标签被转义；title 转义 |
+| `TestFileOutput` | `to_html(path)` 落盘且内容 == 返回值（含嵌套目录自动创建）；`save_html` 助手 |
+| `TestFigures` | 5 种 kind 均产 SVG；未知 kind 报错；无推断时 `plot("ranks")` 报明确错误；`save` 出 `.svg`/`.html`；无脚本；确定性 |
+| `TestBlockedInferenceReport` | rare_treatment + 100% 成功率门槛 → 推断阻断的报告诚实呈现（不崩溃、披露失败轮） |
+
+### 11.4 验收对照（规格 §6 Phase 4）
+
+| 验收项 | 状态 |
+|---|---|
+| 报告显示各臂估计值、SE、CI、排名置信集、两两优势关系 | ✅ 第 1–3 节 |
+| Overlap / ESS / SMD / Bootstrap 诊断分开展示 | ✅ 4.1–4.5 各自小节 + 图 |
+| 导出静态 HTML（无 React/Streamlit 服务器） | ✅ 自包含单文件，无 JS、无外部资源 |
+| 文档与 Quickstart、PyPI 发布准备 | ✅ `docs/api.md` §2.6 + README Quickstart；PyPI 0.3.0 已发布，0.4.0 随下次打 tag 发布 |
+| 干净环境安装后从 CSV 运行示例并生成 HTML | ✅ Notebook 04 第 1 节 CSV 往返 + `to_html`；CI 在 3.12 干净环境执行该 Notebook |
+| 报告中的数值全部追溯到 result 对象 | ✅ `TestTraceability` 全组 + Notebook 04 内置断言 |

@@ -565,6 +565,168 @@ CELLS_03: list[dict[str, object]] = [
 ]
 
 
+CELLS_04: list[dict[str, object]] = [
+    {
+        "cell_type": "markdown",
+        "source": [
+            "# CausalRank — 从 CSV 到静态 HTML 报告（Phase 4）\n",
+            "\n",
+            "本 Notebook 演示 Phase 4 的分发与可视化：\n",
+            "\n",
+            "1. **CSV 往返**：从 CSV 读入数据 → 完整分析（干净环境安装后的典型用法）；\n",
+            "2. `result.to_html(path)`：**静态** HTML 报告（无服务器、无 JS、无外部资源、\n",
+            "   零新增依赖，图表为内联 SVG）；\n",
+            "3. `result.plot(kind)`：5 种可单独保存的图（estimates / ranks / balance / ess / overlap）；\n",
+            "4. **可追溯性**：报告里的每个数字都来自 `result` 对象（同一舍入规则），\n",
+            "   渲染器不重新拟合、不重新计算任何统计量；\n",
+            "5. **诚实形态**：质量门控横幅、结构化警告、推断阻断状态、公式、tie 约定、\n",
+            "   因果识别免责声明全部随报告输出——报告不会比 result 对象更“干净”。\n",
+            "\n",
+            "> **红线不变**：`inconclusive` 不是相等证据；点排名不是最优概率；\n",
+            "> 诊断不能验证无未观测混杂；仅用于研究。",
+        ],
+    },
+    {
+        "cell_type": "code",
+        "source": [
+            "from pathlib import Path\n",
+            "\n",
+            "import pandas as pd\n",
+            "\n",
+            "from causalrank import CausalRank\n",
+            "from causalrank.simulation import make_dataset\n",
+            "\n",
+            "pd.set_option(\"display.width\", 120)\n",
+            "out_dir = Path(\"artifacts\")\n",
+            "out_dir.mkdir(exist_ok=True)",
+        ],
+    },
+    {
+        "cell_type": "markdown",
+        "source": [
+            "## 1. CSV 往返：模拟数据落盘再读入\n",
+            "\n",
+            "真实用户通常从 CSV/Parquet 开始。先把合成数据写到磁盘再读回，\n",
+            "模拟“干净环境 + 用户自己的文件”的用法。",
+        ],
+    },
+    {
+        "cell_type": "code",
+        "source": [
+            "ds = make_dataset(\"confounded\", n=2000, random_state=2026)\n",
+            "csv_path = out_dir / \"demo_data.csv\"\n",
+            "ds.df.to_csv(csv_path, index=False)\n",
+            "df = pd.read_csv(csv_path)\n",
+            "print(\"loaded from\", csv_path, \"->\", df.shape)\n",
+            "df.head(3)",
+        ],
+    },
+    {
+        "cell_type": "markdown",
+        "source": [
+            "## 2. 完整分析（估计 + 联合 Bootstrap + 排名推断）",
+        ],
+    },
+    {
+        "cell_type": "code",
+        "source": [
+            "model = CausalRank(\n",
+            "    treatment=\"treatment\",\n",
+            "    outcome=\"outcome\",\n",
+            "    confounders=[\"x1\", \"x2\", \"x3\", \"x4\"],\n",
+            "    cross_fit=3,\n",
+            "    n_bootstrap=80,\n",
+            "    confidence_level=0.95,\n",
+            "    random_state=2026,\n",
+            ")\n",
+            "result = model.fit(df)\n",
+            "print(\"inference_available:\", result.inference_available, \"| gate:\", result.diagnostics.gate)\n",
+            "result.effects.to_dataframe().round(4)",
+        ],
+    },
+    {
+        "cell_type": "markdown",
+        "source": [
+            "## 3. 生成静态 HTML 报告\n",
+            "\n",
+            "`result.to_html(path)` 返回 HTML 字符串并写盘。报告自包含：\n",
+            "内联 CSS + 内联 SVG，双击即可用浏览器打开，不含脚本与外部资源。",
+        ],
+    },
+    {
+        "cell_type": "code",
+        "source": [
+            "report_path = out_dir / \"causalrank_report.html\"\n",
+            "html = result.to_html(report_path)\n",
+            "print(f\"wrote {report_path} ({len(html):,} bytes)\")\n",
+            "print(\"script tags:\", html.lower().count(\"<script\"))\n",
+            "# 可追溯性自检：报告包含 result 的每个 mu 值（同一舍入）\n",
+            "est = result.effects.to_dataframe()\n",
+            "assert all(f\"{m:.4f}\" in html for m in est[\"mu\"])\n",
+            "assert all(f\"{s:.4f}\" in html for s in est[\"se\"])\n",
+            "print(\"traceability check: every mu/se value present in the report ✓\")",
+        ],
+    },
+    {
+        "cell_type": "markdown",
+        "source": [
+            "## 4. 单独的图：`result.plot(kind)`\n",
+            "\n",
+            "5 种图都返回内联 SVG 的 `Figure`（Jupyter 里直接内联显示；`fig.save(path)` 可存\n",
+            "独立 `.svg` 或 `.html`）。",
+        ],
+    },
+    {
+        "cell_type": "code",
+        "source": [
+            "for kind in (\"estimates\", \"ranks\", \"balance\", \"ess\", \"overlap\"):\n",
+            "    fig = result.plot(kind)\n",
+            "    p = fig.save(out_dir / f\"fig_{kind}.svg\")\n",
+            "    print(f\"{kind:10s} -> {p} ({len(fig.svg):,} bytes)\")\n",
+            "result.plot(\"estimates\")",
+        ],
+    },
+    {
+        "cell_type": "markdown",
+        "source": [
+            "## 5. 推断未启用 / 被阻断时的诚实报告\n",
+            "\n",
+            "报告不会伪造不确定性：`n_bootstrap=None` 或成功率门槛未满足时，\n",
+            "排名/两两区间章节会退化为显式说明（“Not available”），\n",
+            "而不是省略或给出错误数字。",
+        ],
+    },
+    {
+        "cell_type": "code",
+        "source": [
+            "plain = CausalRank(\n",
+            "    treatment=\"treatment\",\n",
+            "    outcome=\"outcome\",\n",
+            "    confounders=[\"x1\", \"x2\", \"x3\", \"x4\"],\n",
+            "    cross_fit=3,\n",
+            "    random_state=2026,\n",
+            ").fit(df)\n",
+            "plain_path = out_dir / \"causalrank_report_no_inference.html\"\n",
+            "plain_html = plain.to_html(plain_path)\n",
+            "print(\"wrote\", plain_path)\n",
+            "print(\"mentions blocked/absent inference:\", \"Not available in this result\" in plain_html)",
+        ],
+    },
+    {
+        "cell_type": "markdown",
+        "source": [
+            "## 6. 边界\n",
+            "\n",
+            "1. 报告只是 result 对象的**视图**：它不计算任何新统计量，也不验证识别假设；\n",
+            "2. HTML 里的置信区间/排名结论依赖联合 Bootstrap 协方差与渐近正态近似，\n",
+            "   覆盖率以模拟检验为准（`scripts/run_se_validation.py` / `run_rank_validation.py`）；\n",
+            "3. 质量门控 `pass` 只说明本样本没有触发经验警告，**不**说明因果假设成立；\n",
+            "4. 同一 result 两次渲染逐字节一致（无渲染时刻时钟，时间戳取 `metadata['created_at']`）。",
+        ],
+    },
+]
+
+
 def _notebook(cells: list[dict[str, object]]) -> dict[str, object]:
     return {
         "cells": [
@@ -601,6 +763,7 @@ def build() -> None:
         ("01_gbm_iptw_from_raw_data.ipynb", CELLS),
         ("02_joint_bootstrap.ipynb", CELLS_02),
         ("03_causal_ranking.ipynb", CELLS_03),
+        ("04_html_report.ipynb", CELLS_04),
     ):
         out = root / filename
         out.write_text(

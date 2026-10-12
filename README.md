@@ -8,12 +8,13 @@
 uncertainty quantification, and statistically defensible treatment ranking from
 observational data.**
 
-> **当前状态：Phase 0–3（v0.3.0，MVP 完成）。**
+> **当前状态：Phase 0–4（v0.4.0）。**
 > 已实现：原始 DataFrame → 多分类 GBM 倾向得分 → Hájek IPTW → `mu_a = E[Y(a)]` 估计
 > + 重叠 / ESS / SMD 诊断与质量门控；**联合 Bootstrap 协方差、SE / 单项 CI**
 > （`n_bootstrap` 显式开启）；失败轮披露与推断阻断；**Bonferroni 两两同时区间、
-> 可确认优劣关系、保守排名置信集** `[1+B_i, K-W_i]`（`result.pairwise / result.ranks`）。
-> **尚未实现（后续）**：max-T/stepdown 排名推断、AIPW/OW、可视化报告（Phase 4）。
+> 可确认优劣关系、保守排名置信集** `[1+B_i, K-W_i]`（`result.pairwise / result.ranks`）；
+> **静态 HTML 报告与 SVG 图**（`result.to_html("report.html")`、`result.plot(kind)`）。
+> **尚未实现（后续）**：max-T/stepdown 排名推断、AIPW/OW。
 > 点估计排序不是统计上确立的排名；`inconclusive` 不是相等的证据。
 
 ---
@@ -95,6 +96,9 @@ print(result.pairwise.to_dataframe())# 两两同时区间与可确认优劣关�
 print(result.diagnostics.summary())  # overlap / 权重 / SMD 诊断
 for w in result.diagnostics.warnings:
     print(w.level, w.code, w.message)
+
+result.to_html("report.html")        # 静态 HTML 报告（自包含，可直接分发）
+result.plot("estimates")             # 森林图；另有 ranks/balance/ess/overlap
 ```
 
 `n_bootstrap` 是**显式开关**：默认 `None` 只输出点估计与诊断（秒级）；设为 300 会每轮

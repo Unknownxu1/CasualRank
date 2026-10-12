@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Literal
 
 import numpy as np
@@ -418,3 +419,52 @@ class CausalRankResult:
             raise TypeError(f"Object of type {type(obj)!r} is not JSON serializable")
 
         return json.dumps(self.to_dict(), indent=indent, default=_default, ensure_ascii=False)
+
+    # ------------------------------------------------------------------
+    # Phase 4: static reporting (optional view; never recomputes anything)
+    # ------------------------------------------------------------------
+    def to_html(
+        self,
+        path: str | Path | None = None,
+        *,
+        title: str = "CausalRank report",
+    ) -> str:
+        """Render this result as a self-contained static HTML report.
+
+        Parameters
+        ----------
+        path:
+            When given, the HTML is also written to this file (UTF-8) and the
+            file content is exactly the returned string.
+        title:
+            Document title / heading.
+
+        Notes
+        -----
+        Every displayed number is read from this result object with the same
+        rounding as the numeric API — the report never re-fits or recomputes.
+        No scripts, no external assets, no render-time clock: rendering the
+        same result twice is byte-identical.
+        """
+        from .visualization import render_html
+
+        document = render_html(result=self, title=title)
+        if path is not None:
+            out = Path(path)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(document, encoding="utf-8")
+        return document
+
+    def plot(self, kind: str = "estimates") -> Any:
+        """Build an inline-SVG figure of this result (Jupyter-friendly).
+
+        ``kind`` is one of ``"estimates"`` (forest plot of mu +/- CI),
+        ``"ranks"`` (rank confidence sets; requires rank inference),
+        ``"balance"`` (max |SMD| before/after weighting), ``"ess"``
+        (raw n vs effective sample size) or ``"overlap"`` (propensity reach
+        per arm). Returns a :class:`causalrank.visualization.Figure` with
+        ``_repr_html_`` for notebooks and a ``save(path)`` method.
+        """
+        from .visualization import plot_result
+
+        return plot_result(result=self, kind=kind)  # type: ignore[arg-type]

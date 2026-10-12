@@ -108,6 +108,30 @@ point_tie`。
 
 机器可读导出；`NaN` 序列化为 `null`。所有数值 API 不依赖绘图库。
 
+### 2.6 `result.to_html()` / `result.plot()`（Phase 4）
+
+```python
+html = result.to_html()                      # 返回自包含 HTML 字符串
+result.to_html("report.html")                # 同时写盘（UTF-8，内容 == 返回值）
+fig = result.plot("estimates")               # 内联 SVG Figure（Jupyter 直接内联显示）
+fig.save("estimates.svg")                    # 也可存 .html
+```
+
+- **静态报告**：无服务器、无 JS、无外部资源、零新增依赖；图表为内联 SVG；
+  双击 `report.html` 即可用浏览器打开；
+- **可追溯性**：渲染器只读 result 对象（effects / diagnostics / covariance /
+  pairwise / ranks / metadata），不重新拟合、不重算统计量；表格数字与数值 API
+  同一舍入（mu/se/CI 4 位小数，非有限值渲染为 `—`）；
+- **诚实形态**：质量门控横幅、结构化警告、推断未启用/被阻断状态、Bonferroni
+  公式、tie 约定、`inconclusive ≠ 相等`、`点排名 ≠ 最优概率`、因果识别免责声明
+  全部随报告输出；
+- **确定性**：报告不含渲染时刻时钟（时间戳取 `metadata["created_at"]`），
+  同一 result 两次渲染逐字节一致；所有标签/警告文本经 HTML 转义；
+- `plot(kind)` 的 kind：`estimates`（森林图 mu±CI）、`ranks`（排名置信集，
+  需要 `result.ranks` 可用）、`balance`（加权前后 max |SMD|）、`ess`（n vs ESS）、
+  `overlap`（各臂倾向得分覆盖范围）；未知 kind 报 `ValueError`；
+- 低层入口：`causalrank.visualization.{render_html, save_html, plot_result, Figure}`。
+
 ## 3. 低层估计器（可单独验证）
 
 ```python
