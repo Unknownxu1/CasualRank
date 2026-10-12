@@ -1,5 +1,9 @@
 # CausalRank
 
+[![PyPI](https://img.shields.io/pypi/v/causalrank.svg)](https://pypi.org/project/causalrank/)
+[![Python](https://img.shields.io/pypi/pyversions/causalrank.svg)](https://pypi.org/project/causalrank/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 **End-to-end Python framework for multi-treatment causal outcome estimation, joint
 uncertainty quantification, and statistically defensible treatment ranking from
 observational data.**
@@ -34,7 +38,16 @@ observational data.**
 
 ## 安装
 
-要求 Python ≥ 3.11。开发环境使用 [uv](https://docs.astral.sh/uv/)：
+要求 Python ≥ 3.11。
+
+从 [PyPI](https://pypi.org/project/causalrank/) 安装发布版：
+
+```bash
+pip install causalrank
+# 或 uv pip install causalrank
+```
+
+开发环境使用 [uv](https://docs.astral.sh/uv/)：
 
 ```bash
 uv sync                 # 创建 .venv 并安装 runtime + dev 依赖
@@ -44,7 +57,7 @@ uv run mypy             # 类型检查
 uv build                # 打包检查
 ```
 
-或在干净环境中安装本包本身：
+或在本地以可编辑模式安装本包本身：
 
 ```bash
 uv pip install -e .      # 或 pip install -e .

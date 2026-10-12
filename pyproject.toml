@@ -32,7 +32,9 @@ dependencies = [
 ]
 
 [project.urls]
-Documentation = "https://github.com/causalrank/causalrank/tree/main/docs"
+Repository = "https://github.com/Unknownxu1/CasualRank"
+Documentation = "https://github.com/Unknownxu1/CasualRank/tree/main/docs"
+Issues = "https://github.com/Unknownxu1/CasualRank/issues"
 
 [dependency-groups]
 dev = [
