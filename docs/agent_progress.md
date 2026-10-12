@@ -1,8 +1,9 @@
-# Agent 进度报告 — Phase 0 + Phase 1 + Phase 2 完成
+# Agent 进度报告 — Phase 0–3 完成（MVP）
 
 > 日期：2026-10-12 · 规格：`PROJECT_SPEC.md` v0.2（§0–§9 权威）
-> 结论：**Phase 0、Phase 1 与 Phase 2 已完成并通过全部质量检查**；排名推断（Phase 3）
-> 按指令未实施，接口已预留。
+> 结论：**Phase 0–3 已完成并通过全部质量检查（MVP 达成）**：原始数据 → GBM 多分类倾向
+> 得分 → Hájek IPTW → 联合 Bootstrap 协方差 → Bonferroni 两两同时区间 → 保守排名置信集。
+> 仅剩 Phase 4（报告可视化与分发）与后续研究扩展（max-T/stepdown、AIPW/OW 等）。
 
 ---
 
@@ -20,36 +21,40 @@ causalrank/
 ├── src/causalrank/
 │   ├── __init__.py              # 公共导出
 │   ├── _version.py              # 单一版本源（hatch 动态版本）
-│   ├── api.py                   # CausalRank.fit 全流程编排（含 Phase 2 推断集成）
+│   ├── api.py                   # CausalRank.fit 全流程编排（含 Phase 2/3 推断集成）
 │   ├── config.py                # CausalRankConfig（含全部门控阈值）+ 校验
 │   ├── exceptions.py            # CausalRankError / CausalRankValidationError
-│   ├── results.py               # EstimatesTable / DiagnosticsReport / CausalRankResult
+│   ├── results.py               # EstimatesTable / PairwiseTable / RankTable / DiagnosticsReport / CausalRankResult
 │   ├── validation.py            # schema、标签规范化、dtype 归一化、缺失、分组、警告
 │   ├── estimators/
 │   │   ├── propensity.py        # 预处理 Pipeline、多分类 GBM、classes_ 对齐、OOF
 │   │   └── iptw.py              # Hájek 主估计器、ESS、HT（内部核对）
 │   ├── inference/
-│   │   └── bootstrap.py         # 联合重拟合 Bootstrap、Σ 校验、normal/percentile CI
+│   │   ├── bootstrap.py         # 联合重拟合 Bootstrap、Σ 校验、normal/percentile CI
+│   │   ├── pairwise.py          # Bonferroni 两两同时差值区间 + 方向判定（Phase 3）
+│   │   └── ranking.py           # [1+B_i, K-W_i] 排名置信集 + 并列约定 + rank_from_estimates
 │   ├── diagnostics/
 │   │   ├── weights.py           # 权重分位数、ESS、极端权重、裁剪统计
 │   │   ├── overlap.py           # e_a(x)/e_{T}(X) 分布、共同支持检查
 │   │   └── balance.py           # 数值/类别项 unweighted & weighted SMD（数值稳定）
 │   └── simulation/
 │       ├── dgp.py               # 8 场景 DGP + 独立 MC 参考 mu_true
-│       └── benchmark.py         # Bias/RMSE/失败与门控统计 + SE/覆盖率校准
-├── tests/                       # 119 个测试（详见 §4）
+│       └── benchmark.py         # Bias/RMSE/失败与门控统计 + SE/覆盖率校准 + 排名覆盖率基准
+├── tests/                       # 145 个测试（详见 §4）
 │   ├── conftest.py, __init__.py
 │   ├── test_validation.py  test_propensity.py  test_iptw.py
 │   ├── test_balance.py     test_diagnostics.py test_dgp.py
 │   ├── test_properties.py  test_api.py         test_benchmark.py
-│   ├── test_bootstrap.py   test_covariance.py
+│   ├── test_bootstrap.py   test_covariance.py  test_ranking.py
 ├── examples/
 │   ├── 01_gbm_iptw_from_raw_data.ipynb   # 已执行、含真实输出
-│   └── 02_joint_bootstrap.ipynb          # Phase 2：协方差/SE/失败阻断/校准演示
+│   ├── 02_joint_bootstrap.ipynb          # Phase 2：协方差/SE/失败阻断/校准演示
+│   └── 03_causal_ranking.ipynb           # Phase 3：同时区间/排名置信集/K=2 退化/真并列红线
 ├── scripts/
-│   ├── build_notebook.py        # 可复现地生成两个示例 notebook
+│   ├── build_notebook.py        # 可复现地生成三个示例 notebook
 │   ├── run_simulation.py        # 研究基准（Bias/RMSE/失败与门控统计）
 │   ├── run_se_validation.py     # 研究基准（SE 校准与覆盖率）
+│   ├── run_rank_validation.py   # 研究基准（排名覆盖率与真并列假确认率）
 │   └── repro_issues.py          # 缺陷复现脚本（审查问题的最小复现）
 └── docs/
     ├── implementation_plan.md   # 架构/定义/测试策略/风险（先行计划）
@@ -61,8 +66,8 @@ causalrank/
     └── agent_progress.md        # 本文件
 ```
 
-**未创建（按指令刻意排除）**：`inference/bootstrap.py`、`inference/pairwise.py`、
-`inference/ranking.py`、`visualization/report.py`——Phase 2/3/4 的内容。
+**未创建（按指令刻意排除）**：`visualization/report.py`（Phase 4）；
+max-T/stepdown 排名推断、AIPW/OW、cluster bootstrap 等属后续研究扩展（规格 §6）。
 
 ---
 
@@ -133,13 +138,13 @@ HT 形式 `(1/n) Σ 1{T_a} Y_i/e_a` 仅内部核对（`horvitz_thompson_estimate
 
 | 检查 | 命令 | 结果 |
 |---|---|---|
-| 单元+端到端测试 | `uv run pytest -q` | **119 passed**（约 4 分钟；含 2 个 `slow` 基准测试） |
+| 单元+端到端测试 | `uv run pytest -q` | **145 passed**（139 项 fast + 6 项 `slow` 模拟基准） |
 | Lint | `uv run ruff check .` | **All checks passed**（对最终目录树实测） |
-| 类型 | `uv run mypy` | **Success: no issues found in 19 source files** |
-| 打包 | `uv build` | `causalrank-0.1.0.tar.gz` + `py3-none-any.whl` 成功 |
+| 类型 | `uv run mypy` | **Success: no issues found in 21 source files** |
+| 打包 | `uv build` | `causalrank-0.3.0.tar.gz` + `py3-none-any.whl` 成功 |
 | 干净安装 | 新 venv 安装 wheel 后端到端 `fit` | 通过（`clean install OK 0.1.0`） |
 | Python 3.11 兼容 | 3.11.15 + pandas 3.0.6 venv 安装 wheel 运行 `-m "not slow"` | **95 passed**（Phase 1 基线；CI 覆盖两版本全量） |
-| Notebook | `uv run jupyter nbconvert --to notebook --execute` | 01/02 全 cell 无错误执行 |
+| Notebook | `uv run jupyter nbconvert --to notebook --execute` | 01/02/03 全 cell 无错误执行 |
 | CI | `.github/workflows/tests.yml` | lint+type+test+build+notebook，3.11/3.12 矩阵（`uv sync --python` 显式指定并打印解释器版本） |
 
 ### 3.2 手算例（独立计算 vs 实现）
@@ -294,19 +299,28 @@ x4 各 level 0.069→0.023 等。**质量门控：PASS（无警告）**——同
 | 5 | P2 | **CI 双 Python 矩阵未落实**：只装解释器不同步绑定，`.python-version` 固定 3.12，两 job 可能都跑 3.12 | `uv sync --all-groups --python ${{ matrix.python-version }}` + 打印实际解释器；本地已用 3.11.15 实测 95 项通过 |
 | 6 | P2 | **基准缺失败/诊断统计**：仅记 Bias/RMSE/ESS，fit 异常会中断整批 | `run_estimand_benchmark` 捕获失败轮（status/error），新增 `runs`（gate、warning codes、min e_obs、max weight share、min ESS ratio）与 `runs_summary`（失败率、门控分布、各警告触发率）；`summary` 增列 `n_ok/n_failed/failure_rate` |
 
+### 6.3 Phase 3 排名内核审查修复（第三批）
+
+| # | 级别 | 问题 | 修复 |
+|---|---|---|---|
+| 1 | P1 | **Mapping + 重排 labels 把优劣关系算反**：`estimates={'A':0.5,'B':0.4}, labels=['B','A']` 时 mu 按插入序取值、输出按 labels 序贴标签，位置错位导致判 B 更好、B 得 [1,1] | `_normalize_inputs` 按 label **取值**重排 mu（协方差按同一顺序解释）；`labels` 必须是 mapping 键的排列，否则拒绝；`rank_from_estimates` 与之一致 |
+| 2 | P2 | **重复 labels 未校验**：`estimates=[0.5,0.4], labels=['A','A']` 输出非法排名区间 `[2,1]`（标签→索引映射被覆盖，统计错位） | 新增 `check_labels`：拒绝重复/不可哈希标签（`pairwise_comparisons` 与 `rank_confidence_sets` 入口均校验）；pairwise 行引用未知标签时报明确错误 |
+| 3 | P2 | **排名模拟全部失败时汇总崩溃**：`run_rank_benchmark(n=2, n_replications=1, n_bootstrap=2)` 在 `groupby('label')` 抛 `KeyError: 'label'`，已记录的失败信息丢失 | 空表按固定 schema 构造（`_RANK_*_COLUMNS`）；新增 `RankBenchmarkResult.runs` 保留逐次 `status/error`；无成功轮时 `blocked_rate=NaN` |
+
 ---
 
 ## 7. 未满足 / 有意推迟的需求（如实披露）
 
 | 需求 | 状态 |
 |---|---|
-| 联合 Bootstrap 协方差、SE/CI（规格 3.5、Phase 2） | **未实施**（按 §9 指令停止于 Phase 1）；`se/ci` 为 NaN，`covariance=None` |
-| Bonferroni 排名置信集（规格 3.6、Phase 3） | **未实施**；`ranks/pairwise=None` |
-| Bootstrap 失败率/稀有臂协议（3.5） | 协议写入 docs，代码待 Phase 2；基准层已能统计 fit 失败率作对照 |
+| 联合 Bootstrap 协方差、SE/CI（规格 3.5、Phase 2） | ✅ 已实施（§8） |
+| Bonferroni 排名置信集（规格 3.6、Phase 3） | ✅ 已实施（§9） |
+| Bootstrap 失败率/稀有臂协议（3.5） | ✅ 已实施：失败轮结构化披露 + 成功率门槛推断阻断 |
 | 聚类（cluster）bootstrap、重复 ID 检测 | 仅重复行提示（`duplicate_rows`）；无 ID 列接口 |
 | 连续 outcome | 架构预留，v0.1 显式拒绝非 0/1 |
 | 报告可视化（Phase 4） | 未实施（数值 API 不依赖绘图库，符合规格） |
-| Monte Carlo **覆盖率**指标 | 需要推断量，Phase 2/3 后统计；当前只有 Bias/RMSE 与失败/门控/告警率 |
+| Monte Carlo **覆盖率**指标 | ✅ `run_se_benchmark`（单项 CI）+ `run_rank_benchmark`（排名区间、假确认率） |
+| max-T / stepdown 排名推断 | 未实施（规格 §6 后续研究扩展） |
 | 真实公开数据示例 | 未使用（避免许可证风险）；全部为合成数据 |
 | 许可证选择 | 暂用 MIT，文件内注明可改 Apache-2.0，待决策 |
 | **环境怪癖**：Python 3.11 + 非 ASCII 项目路径下 `pip install -e .` 失效 | 非包缺陷：CPython 3.11 的 `site.py` 按 locale 编码读 `.pth`，UTF-8 路径 `D:\workspace\因果排名\src` 被误解码而进不了 `sys.path`（3.12+ 正常）。规避：改用 wheel 安装、或把项目放在 ASCII 路径、或设 `PYTHONUTF8=1`。已在 3.11.15 + wheel 下实测 95 项通过 |
@@ -323,7 +337,7 @@ x4 各 level 0.069→0.023 等。**质量门控：PASS（无警告）**——同
 | 随机数可复现并行 | ✅ `SeedSequence(base_seed).spawn(B)`；测试断言 n_jobs=2 与串行逐位一致 |
 | 失败轮处理 | ✅ `{round, seed, reason}` 结构化报告；成功率/轮数门槛触发**推断阻断**（Notebook 02 实测 35/40 → 阻断） |
 | 失败/诊断统计 | ✅ `runs_summary`（失败率、门控分布、告警触发率）+ bootstrap 成功/失败计数 |
-| 结果 schema | ✅ `se/ci_*`、`covariance` 填充；`pairwise/ranks` 保留至 Phase 3 |
+| 结果 schema | ✅ `se/ci_*`、`covariance` 填充；`pairwise/ranks` 于 Phase 3 填充 |
 | 配置位 | ✅ `n_bootstrap/n_jobs/confidence_level/ci_method/bootstrap_*` 全部生效 |
 | 验证基础设施 | ✅ 手算 Σ/CI 测试、不变性测试、SE 校准与覆盖率（§4.3） |
 
@@ -335,23 +349,35 @@ x4 各 level 0.069→0.023 等。**质量门控：PASS（无警告）**——同
 
 ---
 
-## 9. Phase 3 准备情况评估：**就绪**
+## 9. Phase 3 就绪 → 落实情况（本轮完成，MVP 达成）
 
 | 准备项 | 现状 |
 |---|---|
-| 联合协方差 | ✅ `result.covariance`（K×K，标签规范序）已可直接用于差值 SE $\sqrt{\Sigma_{ii}+\Sigma_{jj}-2\Sigma_{ij}}$ |
-| 相关性结构 | ✅ 非对角元素来自联合估计（Notebook 02 实测相关矩阵；手算差值 SE 测试已覆盖公式） |
-| 显著性判定素材 | ✅ `result.effects` 提供 `mu/se/ci`；两两同时区间需加 Bonferroni 因子 $z_{1-\alpha/(2M)}$，$M=K(K-1)/2$ |
-| 并列处理 | ⏳ 需定义 tie convention（规格 3.6）：真实并列下严格全序不唯一，点估计并列须显式标记 |
-| 多重比较 | ⏳ `inference/pairwise.py`、`inference/ranking.py` 待建；`result.pairwise/ranks` 字段已就位 |
-| 验证素材 | ✅ `close_effects`/`equal_effects` 场景与联合覆盖率统计框架可直接复用 |
+| 联合协方差 | ✅ `result.covariance`（K×K，标签规范序）已直接用于差值 SE $\sqrt{\Sigma_{ii}+\Sigma_{jj}-2\Sigma_{ij}}$ |
+| Bonferroni 同时区间 | ✅ `inference/pairwise.py`：$M=K(K-1)/2$、$z_{1-\alpha/(2M)}$，K=2 退化为 $z_{1-\alpha/2}$（有测试） |
+| 可确认优劣关系 | ✅ `decision ∈ {i_better, j_better, inconclusive}`（“更好”语义，尊重 `higher_is_better`） |
+| 排名置信集 | ✅ `inference/ranking.py`：$[L_i,U_i]=[1+B_i,K-W_i]$，`L_i <= point_rank_i <= U_i` 自洽性有测试 |
+| 并列处理 | ✅ tie convention：点估计并列共享名次 + `point_tie` 显式标记，绝不按标签字母序；真实并列下区间变宽 |
+| 多重比较红线 | ✅ `inconclusive` 不是相等证据（决策词表无 equal/tie）；单项 CI 不代替同时检验（文档 + summary 提示） |
+| 不变性 | ✅ Treatment 重排/共同平移不变、`higher_is_better` 翻转一致（测试）；低层入口 `rank_from_estimates`（规格 2.2） |
+| 真并列红线 | ✅ `equal_effects`：慢速 MC 测试 + `run_rank_benchmark` 并列感知覆盖率/假确认率；Notebook 03 实测 confirmed=0 |
+| 覆盖率基准 | ✅ `run_rank_benchmark` / `scripts/run_rank_validation.py`：并列感知真值 `[1+#严格更好, K-#严格更差]` |
+| 结果对象 | ✅ `result.pairwise`（PairwiseTable）、`result.ranks`（RankTable）：公式/`z_crit`/置信水平/tie 约定可追溯 |
+| 用户摘要 | ✅ `result.summary()` 渲染排名与两两关系 + 红线提示；`result.ranks.to_dataframe()` 按规格 2.1 提供 |
 
-**Phase 3 建议顺序**：(1) `inference/pairwise.py`：Bonferroni 同时差值区间 + 方向判定；
-(2) `inference/ranking.py`：$[1+B_i,\, K-W_i]$ 保守排名区间 + 并列约定；
-(3) 不变性测试（Treatment 重排、共同平移）与 K=2 退化检验；
-(4) `equal_effects` 场景验证“不得凭噪声宣称确定排名”；(5) Notebook 03 + 最终排名覆盖率基准。
-**红线**：不以差异不显著作为效果相等的证据；不把 Bootstrap 第一频次当最优概率；
-单项 CI 重叠不代替显著性检验。
+**Phase 3 交付摘要**：`inference/pairwise.py`（同时区间/方向判定/零方差显式规则）、
+`inference/ranking.py`（`rank_confidence_sets` + `rank_from_estimates`）、
+`results.py` 的 `PairwiseTable/RankTable/RankInference`、`config.higher_is_better`、
+`run_rank_benchmark`（并列感知排名覆盖率）、`scripts/run_rank_validation.py`、
+Notebook `03_causal_ranking.ipynb`（含 K=2 退化手算与 `equal_effects` 红线实测）、
+`tests/test_ranking.py`（21 项：手算 2/3 组、相关性、零方差、多重校正、并列、不变性、
+红线 MC，含审查回归——Mapping 重排 labels 不反转优劣、重复 labels 拒绝）。
+
+**已知风险**（保留声明）：排名结论依赖联合 Bootstrap 协方差与渐近正态近似；
+覆盖率以 `run_rank_benchmark` 模拟检验为准，不作通用推断保证。K=2 时 Bonferroni
+退化为常规两方案比较（验收项，已测）。**红线遵守**：不以差异不显著作为效果相等的
+证据；不把 Bootstrap 第一频次当最优概率；不以单项 CI 重叠代替显著性检验；点估计
+并列不以字母顺序伪造确定排序。
 
 ---
 
@@ -359,12 +385,15 @@ x4 各 level 0.069→0.023 等。**质量门控：PASS（无警告）**——同
 
 ```bash
 uv sync                              # 安装 runtime + dev 依赖
-uv run pytest -q                     # 119 tests
+uv run pytest -q                     # 145 tests（含 6 个 slow 模拟基准）
 uv run ruff check . && uv run mypy   # 静态检查
 uv build                             # 打包检查
-uv run jupyter nbconvert --to notebook --execute --inplace examples/01_gbm_iptw_from_raw_data.ipynb
+uv run jupyter nbconvert --to notebook --execute --inplace \
+  examples/01_gbm_iptw_from_raw_data.ipynb examples/02_joint_bootstrap.ipynb \
+  examples/03_causal_ranking.ipynb
 uv run python scripts/run_simulation.py --scenario confounded --n 1500 6000 --replications 20 --cross-fit 5
 uv run python scripts/run_se_validation.py --scenario confounded --n 1200 --replications 16 --bootstrap 100 --cross-fit 5 --n-jobs 4
+uv run python scripts/run_rank_validation.py --scenario equal_effects --n 1200 --replications 20 --bootstrap 100 --cross-fit 5
 ```
 
 环境：Python 3.11/3.12（本地验证 3.12.7）、numpy 2.x、pandas 2.x、scipy 1.x、

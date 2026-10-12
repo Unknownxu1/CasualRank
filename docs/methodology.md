@@ -204,8 +204,7 @@ $$\hat\Sigma_{\mathrm{boot}} = \frac{1}{B-1}\sum_{b=1}^B
 - `ci_method="normal"`（默认）：$\hat\mu_a \pm z_{1-\alpha/2}\sqrt{\hat\Sigma_{aa}}$；
 - `ci_method="percentile"`：保留 draws 的分位数区间，**适用条件**是 bootstrap 分布能近似
   抽样分布（需在报告中说明）；
-- 排名置信集与两两同时区间属 **Phase 3**（Bonferroni 多重比较校正），单项 CI
-  **不能**代替两两显著性检验。
+- 单项 CI **不能**代替两两显著性检验；多重比较校正的两两区间与排名置信集见第 7 节。
 
 ### 6.5 校验与局限
 
@@ -219,27 +218,87 @@ $$\hat\Sigma_{\mathrm{boot}} = \frac{1}{B-1}\sum_{b=1}^B
   CI 覆盖的是**估计量抽样波动**，不覆盖识别假设违背带来的偏差；
 - 重抽样单位为观测行（iid 假设）；重复客户/聚类结构需要 cluster bootstrap（未实现）。
 
-## 7. 本版本**不**提供（Phase 3 及以后）
+## 7. 排名推断：同时区间与排名置信集（Phase 3）
 
-- Bonferroni 同时差值区间、可确认优劣关系、排名置信集（Phase 3）；
+排名 1 表示最好（默认 `higher_is_better=True`：$\mu$ 越高越好；成本/时延型指标用
+`higher_is_better=False`，优劣语义翻转但数值仍是同一目标总体上的 $\mu_a$）。
+
+### 7.1 两两同时差值区间（Bonferroni 基线）
+
+对每对 $i<j$：
+
+$$\hat d_{ij}=\hat\mu_i-\hat\mu_j,\qquad
+\widehat{SE}(\hat d_{ij})=\sqrt{\hat\Sigma_{ii}+\hat\Sigma_{jj}-2\hat\Sigma_{ij}}。$$
+
+$M=K(K-1)/2$，同时区间为
+
+$$\hat d_{ij}\pm z_{1-\alpha/(2M)}\,\widehat{SE}(\hat d_{ij})。$$
+
+判定（`decision`，语义是**更好**方向）：
+
+- $CI_{\mathrm{lower}}(i-j)>0$ → 确认 $i$ 优于 $j$（`i_better`）；
+- $CI_{\mathrm{upper}}(i-j)<0$ → 确认 $j$ 优于 $i$（`j_better`）；
+- 其他 → `inconclusive`。
+
+**`inconclusive` 不是相等的证据**：不能把“差异不显著”翻译成“效果相等”。
+
+边角情形（显式规则，有测试）：
+
+- $K=2$：$M=1$，$z_{1-\alpha/(2M)}=z_{1-\alpha/2}$，退化为常规两方案比较；
+- 差值方差数值为零：区间退化为点 $\{\hat d_{ij}\}$，按符号判定；
+  精确点并列（$\hat d_{ij}=0$）保持 `inconclusive` 并以 `point_tie` 标记；
+- 差值方差出现有意义的负值（协方差非 PSD）：报错而不是静默修复。
+
+### 7.2 保守排名置信区间
+
+定义 $B_i$ 为**可确认优于** $i$ 的路线数、$W_i$ 为**可确认劣于** $i$ 的路线数，则
+
+$$[L_i,\ U_i]\ =\ [1+B_i,\ K-W_i]。$$
+
+- 该区间是同时覆盖意义上的**保守**排名置信集：分不出优劣时区间变宽，
+  这是诚实的答案；
+- `point_rank` 为点排名（competition ranking：并列共享名次），点估计并列以
+  `point_tie` 显式标记，**绝不**按标签字母序伪造确定排序；
+- 真实效果并列时严格全序名次不唯一（每个臂的真实名次是一个范围），
+  区间必须覆盖全部可行名次才算覆盖。
+
+### 7.3 红线与局限
+
+1. 不以差异不显著作为效果相等的证据；
+2. 不把 bootstrap 中点排名第一的频次当作“最优概率”；
+3. 不用单项 CI 重叠代替两两显著性检验；
+4. 不变性（有测试）：Treatment 重排只置换行、效果加共同常数不改变结论、
+   `higher_is_better` 只翻转语义方向；
+5. **方法论陈述**：覆盖依赖联合 bootstrap 协方差与估计量的渐近正态近似，
+   不是无条件保证；用 `run_rank_benchmark` / `scripts/run_rank_validation.py`
+   做覆盖率与真并列下假确认率的模拟检验（并列感知真值：$[1+\#\{\text{严格更好}\},\
+   K-\#\{\text{严格更差}\}]$）。
+
+## 8. 本版本**不**提供（后续）
+
 - AIPW / double robustness、Overlap Weighting（不同的目标总体！）、PSM、DML；
 - 灵敏度分析（未观测混杂）、cluster bootstrap、max-T/stepdown 排名推断。
 
 未启用推断时（`n_bootstrap=None`）：`result.se / ci_low / ci_high` 为 `NaN`，
 `result.covariance / pairwise / ranks` 为 `None`，`result.inference_available = False`；
-启用后 `se/ci/covariance` 填充，`pairwise / ranks` 仍为 `None`（Phase 3）。
+启用且成功率门槛满足后 `se/ci/covariance/pairwise/ranks` 全部填充。
 
-## 8. 验证方法（为什么可信）
+## 9. 验证方法（为什么可信）
 
 1. **手算例**：2 Treatment × 4 样本的 Hájek 与 HT 结果与实现逐位吻合（`tests/test_iptw.py`）；
    已知 draws 的手算协方差与正态 CI（`tests/test_covariance.py`）；
+   2/3 组的差值 SE、同时 CI 与排名区间手算对照（`tests/test_ranking.py`）；
 2. **不变性**（Hypothesis）：组内权重缩放不变、行置换不变、列对齐映射正确；
    Bootstrap：同种子逐位一致、`n_jobs` 并行与串行一致、每轮重拟合被调用计数验证；
+   排名内核：Treatment 重排/共同平移不变、`higher_is_better` 翻转一致、
+   `L_i <= point_rank_i <= U_i` 自洽；
 3. **Oracle 对照**：在已知真值 $e_a(x)$ 的 DGP 上，IPTW 权重使加权 SMD 随 $n$ 下降、
    $\hat\mu_a \to \mu_a$；
 4. **重复实验**：`tests/test_benchmark.py` 与 `scripts/run_simulation.py` 在多种子、
    多样本量下比较 Bias/RMSE（调整前 vs 调整后），偏差随 $n$ 收敛；
    `run_se_benchmark` / `scripts/run_se_validation.py` 校准 SE 与覆盖率；
+   `run_rank_benchmark` / `scripts/run_rank_validation.py` 校准排名区间覆盖率与
+   真并列（`equal_effects`）下的假确认率；
 5. **诊断有效性**：弱重叠/强混杂场景触发对应警告与门控降级，而非误报“可靠”。
 
 Monte Carlo 误差按 $\sqrt{\hat p(1-\hat p)/R}$ 报告；有限模拟中 0.946 与 0.95 的差别

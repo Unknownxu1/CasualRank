@@ -1,13 +1,12 @@
 """CausalRank: multi-treatment causal estimation and ranking from observational data.
 
-Phase 0/1 release: raw DataFrame -> multi-class GBM propensity scores ->
-Hajek IPTW -> per-treatment potential-outcome means ``mu_a = E[Y(a)]`` on a
-common target population, with weight / overlap / balance diagnostics and
-quality-gate warnings.
+Raw DataFrame -> multi-class GBM propensity scores -> Hajek IPTW -> per-treatment
+potential-outcome means ``mu_a = E[Y(a)]`` on a common target population, with
+weight / overlap / balance diagnostics, quality-gate warnings, joint re-fitting
+bootstrap covariance (Phase 2) and Bonferroni rank confidence sets (Phase 3).
 
-Joint bootstrap covariance (Phase 2) and rank confidence sets (Phase 3) are not
-implemented in this release; ``CausalRankResult.inference_available`` is
-``False`` and the reserved uncertainty fields are ``None``/``NaN``.
+When the joint bootstrap is disabled or blocked, ``CausalRankResult.inference_available``
+is ``False`` and the reserved uncertainty fields are ``None``/``NaN``.
 """
 
 from __future__ import annotations

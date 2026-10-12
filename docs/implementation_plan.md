@@ -148,6 +148,8 @@ Monte Carlo 误差按 `sqrt(p(1-p)/R)` 报告；快测试与研究基准分开�
 4. **M3**：Notebook 可执行、文档齐全、lint/type/build 全绿、CI 配置完成、进度报告。
 5. **M4（Phase 2）**：联合 Bootstrap 协方差 + SE/CI + 失败轮披露/推断阻断 +
    SE/覆盖率 Monte Carlo 校准 + Notebook 02。
+6. **M5（Phase 3，MVP 完成）**：Bonferroni 同时区间 + 可确认优劣关系 + 保守排名
+   置信集 + 并列约定 + 排名覆盖率基准 + Notebook 03。
 
 ## 7. Phase 2 实施增补（已完成）
 
@@ -164,3 +166,24 @@ Monte Carlo 误差按 `sqrt(p(1-p)/R)` 报告；快测试与研究基准分开�
      低于门槛时**阻断推断**（critical 警告 + 原因清单），而非输出可疑协方差。
   4. `validate_covariance()` 对非对称/负对角/非 PSD **明确报错**，不做数值修补。
   5. joblib 仅用于轮间并行（新增显式依赖），单线程路径不依赖它。
+
+## 8. Phase 3 实施增补（已完成，MVP 完成）
+
+- **模块**：`src/causalrank/inference/pairwise.py`（Bonferroni 同时差值区间、方向判定、
+  零方差显式规则）、`src/causalrank/inference/ranking.py`（`rank_confidence_sets`、
+  低层入口 `rank_from_estimates`，规格 2.2）；
+- **集成**：`CausalRank.fit` 在协方差可用时填充 `result.pairwise`（PairwiseTable）与
+  `result.ranks`（RankTable）；`config.higher_is_better` 控制优劣语义方向；
+- **关键取舍**：
+  1. 只实现 Bonferroni 基线（规格 3.6）；max-T/stepdown 被 `rank_from_estimates`
+     显式拒绝，留给后续研究阶段，避免半成品统计量被误用。
+  2. 决策词表只有 `i_better / j_better / inconclusive`——**没有** `equal`：
+     差异不显著不允许被解读为相等（红线）。
+  3. 点排名用 competition ranking（并列共享名次）+ `point_tie` 标记；计算方式
+     按“严格优于计数”而非 `argsort`，杜绝标签字母序打破并列。
+  4. 零方差差值：区间退化为点、按符号判定；精确点并列保持 `inconclusive`。
+     负差值方差（非 PSD）报错不修补。
+  5. 覆盖率基准的真值是**并列感知**的名次区间，覆盖定义要求区间包含全部可行名次，
+     使 `equal_effects` 下的假确认直接表现为失覆盖。
+  6. `result.ranks` 提供 `to_dataframe()`（规格 2.1 用户故事）；公式、`z_crit`、
+     置信水平、tie 约定随结果对象输出（可追溯性验收项）。

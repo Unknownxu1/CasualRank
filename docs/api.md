@@ -1,4 +1,4 @@
-# API 参考（Phase 1）
+# API 参考（Phase 1–3）
 
 ## 1. 高层入口
 
@@ -20,6 +20,7 @@ model = CausalRank(
     bootstrap_keep_draws=True,     # 是否保留 B×K draws
     bootstrap_min_success_rate=0.9,# 低于此成功率阻断推断
     bootstrap_min_successes=30,    # 低于此成功轮数阻断推断
+    higher_is_better=True,         # False = 结果越低越好（成本/时延型）；只翻转“更好”语义
     random_state=2026,
     cross_fit=5,                   # None 或 int >= 2：OOF 倾向得分
     clip_propensity=None,          # None 或 eps in (0, 0.5)：显式下界裁剪
@@ -50,10 +51,10 @@ result = model.fit(df)
 |---|---|---|
 | `effects` | `EstimatesTable` | 各臂点估计与权重/ESS；`se/ci_*` 在启用推断后填充 |
 | `covariance` | `np.ndarray \| None` | `Σ_boot`（K×K，标签规范序）；未启用/被阻断时为 `None` |
-| `pairwise` | `DataFrame \| None` | `None`（Phase 3） |
-| `ranks` | `DataFrame \| None` | `None`（Phase 3） |
+| `pairwise` | `PairwiseTable \| None` | Bonferroni 两两同时区间与方向判定（Phase 3） |
+| `ranks` | `RankTable \| None` | 点排名 + 保守排名置信区间 `[1+B_i, K-W_i]`（Phase 3） |
 | `diagnostics` | `DiagnosticsReport` | 诊断表 + 结构化警告 |
-| `metadata` | `dict` | 配置、版本、`bootstrap`（B/成功轮/失败原因/base_seed）、免责声明 |
+| `metadata` | `dict` | 配置、版本、`bootstrap`、`rank_note`、免责声明 |
 | `inference_available` | `bool` | 推断是否产出 |
 
 ### 2.1 `result.effects.to_dataframe()`
@@ -75,7 +76,35 @@ result = model.fit(df)
 - `.gate`：`pass | caution | fail`；
 - `.summary()`：上述内容的文本渲染 + 因果提示。
 
-### 2.3 `result.to_dict()` / `result.to_json()`
+### 2.3 `result.pairwise`（Phase 3）
+
+`.to_dataframe()` 列（每对 `i < j` 一行，标签规范序）：
+`label_i, label_j, mu_i, mu_j, diff, se_diff, ci_low, ci_high, z_crit, n_pairs,
+confidence_level, decision, confirmed, point_tie, degenerate_se`。
+
+- `diff = mu_i - mu_j`，`se_diff = sqrt(Σ_ii + Σ_jj - 2Σ_ij)`（联合协方差带入相关性）；
+- `ci_*` 为 Bonferroni 同时区间 `diff ± z_{1-α/(2M)}·se_diff`，`M = n_pairs = K(K-1)/2`；
+- `decision ∈ {"i_better", "j_better", "inconclusive"}`，语义是**更好**方向
+  （受 `higher_is_better` 影响）；`inconclusive` **不是**相等的证据；
+- `degenerate_se=True` 表示差值方差数值为零：区间退化为点，按 `diff` 的符号判定，
+  精确点并列（`point_tie`）保持 `inconclusive`；
+- `.confirmed`：仅含已确认优劣关系的子表；
+- `.summary()` / `.to_dict()`：含公式、`z_crit`、置信水平（可追溯）。
+
+### 2.4 `result.ranks`（Phase 3）
+
+`.to_dataframe()` 列：
+`label, mu, point_rank, rank_low, rank_high, n_confirmed_better, n_confirmed_worse,
+point_tie`。
+
+- 保守排名置信区间 `[rank_low, rank_high] = [1 + B_i, K - W_i]`：
+  `B_i` = 可确认优于 i 的臂数，`W_i` = 可确认劣于 i 的臂数（由同时区间得出）；
+- `point_rank`：点排名，**并列共享名次**（competition ranking），`point_tie` 显式标记；
+  绝不按标签字母序伪造确定排序；
+- 真实效果并列时严格全序名次不唯一，区间相应变宽（tie convention 见 `.to_dict()`）；
+- 结论依赖联合协方差与渐近正态近似；bootstrap 中点排名第一的频次**不是**最优概率。
+
+### 2.5 `result.to_dict()` / `result.to_json()`
 
 机器可读导出；`NaN` 序列化为 `null`。所有数值 API 不依赖绘图库。
 
@@ -96,6 +125,9 @@ from causalrank.inference import (
     derive_round_seeds, resample_indices,
     validate_covariance,   # 对称/对角/PSD 校验（非 PSD 报错，不修补）
     normal_ci, percentile_ci,
+    pairwise_comparisons,  # Bonferroni 同时差值区间（3.6）
+    rank_confidence_sets,  # [1+B_i, K-W_i] 保守排名区间
+    rank_from_estimates,   # 低层排名内核入口（规格 2.2）-> RankInference
 )
 ```
 
@@ -105,6 +137,22 @@ from causalrank.inference import (
 - `JointBootstrapResult`：`draws (B_ok×K)`、`covariance (K×K)`、`failures`
   （`round/seed/reason` 结构化失败报告）、`seeds`、`base_seed`、`usable`、`warnings`；
 - `horvitz_thompson_estimate` 为**内部**核对函数，不承诺公共 API 稳定性。
+
+低层排名内核（规格 2.2，可单独验证）：
+
+```python
+from causalrank.inference import rank_from_estimates
+
+ranking = rank_from_estimates(
+    estimates={"A": 0.25, "B": 0.24, "C": 0.17},  # 插入序 = 协方差行/列序
+    covariance=sigma,
+    confidence_level=0.95,
+    method="bonferroni",   # v0.1 仅支持 Bonferroni；max-T/stepdown 为后期扩展
+    higher_is_better=True,
+)
+ranking.to_dataframe()     # 排名表（同 result.ranks.to_dataframe()）
+ranking.pairwise           # PairwiseTable
+```
 
 ## 4. 合成数据
 
@@ -140,8 +188,17 @@ ds.mu_true_mc_se, ds.n_reference, ds.reference_seed
 - `.summary`：`empirical_sd`（$\hat\mu$ 的经验标准差）、`mean_se`、`se_ratio = mean_se/empirical_sd`、
   `coverage` 与 `coverage_mc_se = sqrt(p(1-p)/R)`。
 
+`run_rank_benchmark(...)` 返回 `RankBenchmarkResult`（Phase 3 校准）：
+
+- `.replications`：逐（重复 × 臂）行（`true_rank_min/max`（并列感知真值）、
+  `rank_low/high`、`covers`、`point_rank`）；
+- `.summary`：臂级 `coverage / coverage_mc_se / mean_rank_width`；
+- `.run_summary`：`any_confirmed_rate`（真并列场景下的假确认率）、
+  `mean_n_confirmed_pairs`、`all_rank_sets_full_rate`、`blocked_rate`。
+
 研究脚本：`scripts/run_simulation.py`（Bias/RMSE/失败与门控统计）、
-`scripts/run_se_validation.py`（SE 校准与覆盖率）。
+`scripts/run_se_validation.py`（SE 校准与覆盖率）、
+`scripts/run_rank_validation.py`（排名覆盖率与假确认率）。
 
 ## 5. 异常
 
@@ -150,7 +207,8 @@ ds.mu_true_mc_se, ds.n_reference, ds.reference_seed
 
 ## 6. 稳定性约定
 
-- 数值列的**顺序与名称**只增不改（`pairwise/ranks` 将在 Phase 3 从 `None` 变为有值）；
+- 数值列的**顺序与名称**只增不改（`pairwise/ranks` 已在 Phase 3 填充：
+  `pairwise` 为 `PairwiseTable`、`ranks` 为 `RankTable`，列集合自此固定）；
 - 警告 `code` 为稳定标识，`message` 文本可变；
 - `metadata` 的键只增不删；
 - 同数据 + 同 `random_state` + 同配置 → 逐位一致的结果（含 Bootstrap draws 与 Σ），

@@ -64,7 +64,7 @@ class CausalRankConfig:
     # None (point estimates + diagnostics only) because every bootstrap round
     # re-runs the full propensity fit: a 300-round bootstrap turns a seconds-
     # long fit into minutes. Pass n_bootstrap=300 (or any >= 1) to obtain
-    # covariance / SE / CI — this is an explicit opt-in, never implicit.
+    # covariance / SE / CI -- this is an explicit opt-in, never implicit.
     confidence_level: float = 0.95
     n_bootstrap: int | None = None
     n_jobs: int = 1
@@ -72,6 +72,13 @@ class CausalRankConfig:
     bootstrap_keep_draws: bool = True
     bootstrap_min_success_rate: float = 0.9
     bootstrap_min_successes: int = 30
+
+    # --- rank inference (Phase 3) ---
+    # Rank 1 is the best arm: the highest ``mu`` when ``higher_is_better=True``
+    # (default, e.g. conversion rate), the lowest ``mu`` when False (e.g. cost
+    # or latency). Only flips the interpretation of "better"; the numbers are
+    # always ``mu_a = E[Y(a)]`` on the same target population.
+    higher_is_better: bool = True
 
     # --- randomness ---
     random_state: int | None = None
@@ -176,6 +183,8 @@ class CausalRankConfig:
             raise CausalRankValidationError("n_jobs must be >= 1.")
         if self.random_state is not None and not isinstance(self.random_state, int):
             raise CausalRankValidationError("random_state must be an int or None.")
+        if not isinstance(self.higher_is_better, bool):
+            raise CausalRankValidationError("higher_is_better must be a bool.")
 
         if self.cross_fit is not None:
             if not isinstance(self.cross_fit, int) or isinstance(self.cross_fit, bool):

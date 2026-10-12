@@ -1,6 +1,6 @@
 """High-level API: ``CausalRank(...).fit(df) -> CausalRankResult``.
 
-Pipeline (Phase 1):
+Pipeline:
 
 1. schema / label / missingness validation (:mod:`causalrank.validation`);
 2. multi-class GBM propensity scores with in-fold preprocessing and optional
@@ -8,11 +8,16 @@ Pipeline (Phase 1):
 3. Hajek IPTW estimates ``mu_a = E[Y(a)]`` on the common target population
    (:mod:`causalrank.estimators.iptw`);
 4. weight / overlap / balance diagnostics with quality-gate warnings
-   (:mod:`causalrank.diagnostics`).
+   (:mod:`causalrank.diagnostics`);
+5. joint re-fitting bootstrap covariance (Phase 2,
+   :mod:`causalrank.inference.bootstrap`) when ``n_bootstrap`` is set;
+6. Bonferroni simultaneous pairwise comparisons and conservative rank
+   confidence sets (Phase 3, :mod:`causalrank.inference.ranking`) whenever the
+   covariance is available.
 
-Uncertainty quantification (joint bootstrap covariance, simultaneous pairwise
-intervals, rank confidence sets) is *not* part of this release; the result
-object exposes the reserved fields but reports ``inference_available=False``.
+Without a usable bootstrap covariance the result object reports
+``inference_available=False`` and the reserved uncertainty fields stay
+``None``/``NaN``.
 """
 
 from __future__ import annotations
@@ -63,6 +68,7 @@ class CausalRank:
         bootstrap_keep_draws: bool = True,
         bootstrap_min_success_rate: float = 0.9,
         bootstrap_min_successes: int = 30,
+        higher_is_better: bool = True,
         random_state: int | None = None,
         cross_fit: int | None = None,
         clip_propensity: float | None = None,
@@ -95,6 +101,7 @@ class CausalRank:
             bootstrap_keep_draws=bootstrap_keep_draws,
             bootstrap_min_success_rate=bootstrap_min_success_rate,
             bootstrap_min_successes=bootstrap_min_successes,
+            higher_is_better=higher_is_better,
             random_state=random_state,
             cross_fit=cross_fit,
             clip_propensity=clip_propensity,
@@ -216,6 +223,24 @@ class CausalRank:
                 effects.ci_low = np.asarray(ci_low, dtype=float)
                 effects.ci_high = np.asarray(ci_high, dtype=float)
 
+        # ---- Phase 3: simultaneous pairwise CIs + rank confidence sets --------
+        pairwise: Any = None
+        ranks: Any = None
+        if covariance is not None:
+            from .inference.ranking import rank_from_estimates
+
+            rank_inference = rank_from_estimates(
+                estimates={
+                    lab: float(m) for lab, m in zip(validated.labels, estimate.mu, strict=True)
+                },
+                covariance=covariance,
+                confidence_level=config.confidence_level,
+                method="bonferroni",
+                higher_is_better=config.higher_is_better,
+            )
+            pairwise = rank_inference.pairwise
+            ranks = rank_inference.ranks
+
         diagnostics = DiagnosticsReport(
             group_summary=group_summary,
             weights=weights_df,
@@ -253,6 +278,19 @@ class CausalRank:
                 "Joint bootstrap disabled (n_bootstrap=None): point estimates and diagnostics "
                 "only; se/ci are NaN by design."
             )
+        metadata["higher_is_better"] = config.higher_is_better
+        metadata["rank_method"] = "bonferroni" if ranks is not None else None
+        metadata["rank_note"] = (
+            "Simultaneous Bonferroni pairwise intervals and conservative rank confidence "
+            "sets [1 + B_i, K - W_i] computed from the joint bootstrap covariance "
+            f"(confidence_level={config.confidence_level}). 'inconclusive' is not an "
+            "equality claim; exact point-estimate ties share the same point rank and are "
+            "flagged; the bootstrap frequency of point-rank 1 is not a probability of "
+            "being best."
+            if ranks is not None
+            else "Rank inference requires a usable joint bootstrap covariance "
+            "(set n_bootstrap and keep the success-rate gates satisfied)."
+        )
         metadata["causal_caveat"] = (
             "Interpretation as causal requires consistency, no unmeasured confounding, "
             "positivity and iid sampling. These assumptions cannot be verified from data; "
@@ -266,8 +304,8 @@ class CausalRank:
             diagnostics=diagnostics,
             metadata=metadata,
             covariance=covariance,
-            pairwise=None,
-            ranks=None,
+            pairwise=pairwise,
+            ranks=ranks,
             inference_available=inference_available,
         )
         return self.result_

@@ -1,6 +1,6 @@
 """Result containers returned by :class:`causalrank.api.CausalRank`.
 
-Design rules (PROJECT_SPEC.md sections 2.3, 3.7, 8):
+Design rules (PROJECT_SPEC.md sections 2.3, 3.6, 3.7, 8):
 
 * numeric API must not depend on any plotting library;
 * Phase 1 computes **estimates and diagnostics only**; uncertainty fields are
@@ -8,7 +8,10 @@ Design rules (PROJECT_SPEC.md sections 2.3, 3.7, 8):
   ``inference_available=False`` — they are filled by the Phase 2 joint
   bootstrap and Phase 3 rank inference;
 * every warning is a structured record (code / level / message / details)
-  instead of a bare printed string, so quality gates are machine-checkable.
+  instead of a bare printed string, so quality gates are machine-checkable;
+* Phase 3 objects (:class:`PairwiseTable`, :class:`RankTable`) carry the
+  multiplicity settings (confidence level, Bonferroni factor, tie convention)
+  next to the numbers so every ranking statement is traceable to its formula.
 """
 
 from __future__ import annotations
@@ -26,6 +29,23 @@ WarningLevel = Literal["info", "warning", "critical"]
 GateLevel = Literal["pass", "caution", "fail"]
 
 _LEVEL_ORDER: dict[str, int] = {"info": 0, "warning": 1, "critical": 2}
+
+#: Point-estimate tie convention used by the ranking kernel (PROJECT_SPEC 3.6).
+TIE_CONVENTION = (
+    "exact point-estimate ties share the same (best) point rank and are flagged in "
+    "'point_tie'; they are never broken by label order. When true effects tie, a strict "
+    "total order is not uniquely defined and the rank confidence set widens accordingly."
+)
+
+PAIRWISE_FORMULA = (
+    "d_ij = mu_i - mu_j; se(d_ij) = sqrt(Sigma_ii + Sigma_jj - 2 Sigma_ij); "
+    "CI = d_ij +- z_{1-alpha/(2M)} * se(d_ij), M = K(K-1)/2 (Bonferroni)"
+)
+
+RANK_FORMULA = (
+    "rank CI = [1 + B_i, K - W_i]; B_i = number of arms confirmed better than i, "
+    "W_i = number of arms confirmed worse than i (from the simultaneous pairwise CIs)"
+)
 
 
 @dataclass(frozen=True)
@@ -167,11 +187,140 @@ class DiagnosticsReport:
 
 
 @dataclass
+class PairwiseTable:
+    """Bonferroni simultaneous pairwise comparisons (Phase 3, spec 3.6).
+
+    ``table`` has one row per unordered pair ``i < j`` in canonical label
+    order; the numeric columns are fixed (see ``to_dataframe``). ``decision``
+    is ``"i_better"`` / ``"j_better"`` / ``"inconclusive"`` in the *better*
+sense (respecting ``higher_is_better``) — ``"inconclusive"`` is **not** an
+    equality claim.
+    """
+
+    labels: tuple[Any, ...]
+    table: pd.DataFrame
+    confidence_level: float
+    n_pairs: int
+    z_crit: float
+    higher_is_better: bool
+    method: str = "bonferroni"
+
+    def to_dataframe(self) -> pd.DataFrame:
+        return self.table.copy()
+
+    @property
+    def confirmed(self) -> pd.DataFrame:
+        """Only the pairs with a confirmed better/worse relation."""
+        return self.table[self.table["confirmed"].astype(bool)].reset_index(drop=True)
+
+    def summary(self) -> str:
+        lines: list[str] = []
+        lines.append("-- pairwise simultaneous comparisons (Bonferroni) --")
+        lines.append(f"   formula: {PAIRWISE_FORMULA}")
+        lines.append(
+            f"   confidence_level = {self.confidence_level}, M = {self.n_pairs}, "
+            f"z_crit = {self.z_crit:.6f}, higher_is_better = {self.higher_is_better}"
+        )
+        lines.append(self.table.to_string(index=False))
+        lines.append(
+            "   decision is in the 'better' sense; 'inconclusive' means the data did not "
+            "confirm a direction — it does NOT mean the two arms are equal. Pointwise CIs "
+            "are not a substitute for these simultaneous intervals."
+        )
+        return "\n".join(lines)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "labels": list(self.labels),
+            "method": self.method,
+            "formula": PAIRWISE_FORMULA,
+            "confidence_level": self.confidence_level,
+            "n_pairs": self.n_pairs,
+            "z_crit": self.z_crit,
+            "higher_is_better": self.higher_is_better,
+            "pairs": self.table.to_dict(orient="records"),
+        }
+
+
+@dataclass
+class RankTable:
+    """Point ranks and conservative rank confidence sets (Phase 3, spec 3.6).
+
+    ``table`` columns: ``label``, ``mu``, ``point_rank``, ``rank_low``,
+    ``rank_high``, ``n_confirmed_better`` (B_i), ``n_confirmed_worse`` (W_i),
+    ``point_tie``. The rank interval ``[rank_low, rank_high] = [1 + B_i,
+    K - W_i]`` is simultaneous-coverage based and deliberately conservative.
+    """
+
+    labels: tuple[Any, ...]
+    table: pd.DataFrame
+    confidence_level: float
+    higher_is_better: bool
+    method: str = "bonferroni"
+    tie_convention: str = TIE_CONVENTION
+
+    def to_dataframe(self) -> pd.DataFrame:
+        return self.table.copy()
+
+    def summary(self) -> str:
+        lines: list[str] = []
+        lines.append("-- rank point estimates and confidence sets --")
+        lines.append(f"   formula: {RANK_FORMULA}")
+        lines.append(
+            f"   confidence_level = {self.confidence_level}, "
+            f"higher_is_better = {self.higher_is_better}"
+        )
+        lines.append(self.table.to_string(index=False))
+        lines.append(f"   tie convention: {self.tie_convention}")
+        lines.append(
+            "   The rank interval covers the true rank under the simultaneous pairwise "
+            "intervals and the asymptotic normal approximation of the estimator. A rank of "
+            "1 in the point estimate is NOT a probability of being best, and a wider "
+            "interval is the honest answer when arms cannot be separated."
+        )
+        return "\n".join(lines)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "labels": list(self.labels),
+            "method": self.method,
+            "formula": RANK_FORMULA,
+            "confidence_level": self.confidence_level,
+            "higher_is_better": self.higher_is_better,
+            "tie_convention": self.tie_convention,
+            "ranks": self.table.to_dict(orient="records"),
+        }
+
+
+@dataclass
+class RankInference:
+    """Pairwise comparisons plus the rank confidence sets derived from them."""
+
+    pairwise: PairwiseTable
+    ranks: RankTable
+
+    @property
+    def labels(self) -> tuple[Any, ...]:
+        return self.ranks.labels
+
+    def to_dataframe(self) -> pd.DataFrame:
+        """The ranks table (``result.ranks.to_dataframe()`` in the user story)."""
+        return self.ranks.to_dataframe()
+
+    def summary(self) -> str:
+        return self.ranks.summary() + "\n" + self.pairwise.summary()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"pairwise": self.pairwise.to_dict(), "ranks": self.ranks.to_dict()}
+
+
+@dataclass
 class CausalRankResult:
     """Everything returned by ``CausalRank.fit``.
 
-    ``covariance``, ``pairwise`` and ``ranks`` are reserved for Phase 2/3 and
-    are ``None`` in this release; ``inference_available`` makes that state
+    ``covariance``, ``pairwise`` and ``ranks`` are filled by the Phase 2 joint
+    bootstrap and the Phase 3 rank inference; when inference is disabled or
+    blocked they stay ``None`` and ``inference_available`` makes that state
     explicit instead of silently omitting uncertainty.
     """
 
@@ -179,8 +328,8 @@ class CausalRankResult:
     diagnostics: DiagnosticsReport
     metadata: dict[str, Any]
     covariance: np.ndarray | None = None
-    pairwise: pd.DataFrame | None = None
-    ranks: pd.DataFrame | None = None
+    pairwise: PairwiseTable | None = None
+    ranks: RankTable | None = None
     inference_available: bool = False
 
     # ------------------------------------------------------------------
@@ -213,12 +362,25 @@ class CausalRankResult:
         if self.inference_available:
             se_note = self.metadata.get("inference_note", "")
             lines.append(f"uncertainty: {se_note}")
-            lines.append(
-                "!! these intervals cover sampling variability of the estimator under the\n"
-                "!! fitted model ONLY. Rank confidence sets and multiplicity-adjusted pairwise\n"
-                "!! comparisons are Phase 3 and are NOT computed here — do not read the\n"
-                "!! point-estimate ordering as a statistically established ranking."
-            )
+            if self.ranks is not None and self.pairwise is not None:
+                lines.append(self.ranks.summary())
+                lines.append("")
+                lines.append(self.pairwise.summary())
+                lines.append("")
+                lines.append(
+                    "!! these intervals cover sampling variability of the estimator under the\n"
+                    "!! fitted model ONLY. They rely on the joint bootstrap covariance and an\n"
+                    "!! asymptotic normal approximation. Do not read point-estimate ordering as\n"
+                    "!! a statistically established ranking, do not treat an inconclusive pair\n"
+                    "!! as equality, and do not treat the bootstrap frequency of rank 1 as the\n"
+                    "!! probability of being best."
+                )
+            else:
+                lines.append(
+                    "!! rank confidence sets and multiplicity-adjusted pairwise comparisons are\n"
+                    "!! NOT computed here — do not read the point-estimate ordering as a\n"
+                    "!! statistically established ranking."
+                )
         else:
             lines.append(
                 "!! uncertainty quantification is NOT available in this result: se / ci / ranks\n"
@@ -235,8 +397,8 @@ class CausalRankResult:
         return {
             "effects": self.effects.to_dataframe().to_dict(orient="records"),
             "covariance": None if self.covariance is None else np.asarray(self.covariance).tolist(),
-            "pairwise": None if self.pairwise is None else self.pairwise.to_dict(orient="records"),
-            "ranks": None if self.ranks is None else self.ranks.to_dict(orient="records"),
+            "pairwise": None if self.pairwise is None else self.pairwise.to_dict(),
+            "ranks": None if self.ranks is None else self.ranks.to_dict(),
             "inference_available": bool(self.inference_available),
             "diagnostics": self.diagnostics.to_dict(),
             "metadata": dict(self.metadata),

@@ -1,4 +1,4 @@
-"""Generate examples/01_gbm_iptw_from_raw_data.ipynb (kept reproducible)."""
+"""Generate the examples/*.ipynb notebooks (kept reproducible)."""
 
 from __future__ import annotations
 
@@ -389,6 +389,182 @@ CELLS_02: list[dict[str, object]] = [
 ]
 
 
+CELLS_03: list[dict[str, object]] = [
+    {
+        "cell_type": "markdown",
+        "source": [
+            "# CausalRank — 从估计到排名：同时区间与排名置信集（Phase 3）\n",
+            "\n",
+            "本 Notebook 演示 Phase 3 的排名推断内核：\n",
+            "\n",
+            "1. **两两同时区间**：$\\hat d_{ij}=\\hat\\mu_i-\\hat\\mu_j$，\n",
+            "   $\\widehat{SE}(\\hat d_{ij})=\\sqrt{\\hat\\Sigma_{ii}+\\hat\\Sigma_{jj}-2\\hat\\Sigma_{ij}}$，\n",
+            "   Bonferroni 校正 $\\hat d_{ij}\\pm z_{1-\\alpha/(2M)}\\widehat{SE}$，$M=K(K-1)/2$；\n",
+            "2. **可确认优劣关系**：仅当同时区间整体位于 0 的一侧才宣称“确定优于/劣于”；\n",
+            "3. **保守排名置信区间**：$[L_i,U_i]=[1+B_i,\\ K-W_i]$，\n",
+            "   $B_i$ 为可确认优于 $i$ 的路线数、$W_i$ 为可确认劣于 $i$ 的路线数；\n",
+            "4. **K=2 退化检验**：$M=1$ 时 Bonferroni 因子就是常规 $z_{1-\\alpha/2}$；\n",
+            "5. **真并列红线**：`equal_effects` 场景下噪声不得产生确定排名。\n",
+            "\n",
+            "> **红线**：不显著 ≠ 相等（`inconclusive` 不是相等的证据）；\n",
+            "> 点估计并列共享名次并显式标记，绝不按标签字母序伪造确定排序；\n",
+            "> bootstrap 中点排名第一的频次不是“最优概率”；单项 CI 重叠不能代替显著性检验。\n",
+            "> 排名结论依赖联合协方差与渐近正态近似，覆盖率以模拟检验为准（`scripts/run_rank_validation.py`）。",
+        ],
+    },
+    {
+        "cell_type": "code",
+        "source": [
+            "import numpy as np\n",
+            "import pandas as pd\n",
+            "\n",
+            "from causalrank import CausalRank\n",
+            "from causalrank.inference import rank_from_estimates\n",
+            "from causalrank.simulation import make_dataset\n",
+            "\n",
+            "pd.set_option(\"display.width\", 130)",
+        ],
+    },
+    {
+        "cell_type": "markdown",
+        "source": [
+            "## 1. 完整分析：估计 + 联合 Bootstrap 协方差\n",
+            "\n",
+            "排名推断消费的是 **Phase 2 的联合协方差** $\\hat\\Sigma$（K×K，标签规范序）。\n",
+            "关闭 `n_bootstrap` 或成功率过低时推断被阻断，`pairwise/ranks` 保持 `None`。",
+        ],
+    },
+    {
+        "cell_type": "code",
+        "source": [
+            "ds = make_dataset(\"confounded\", n=2000, random_state=2026)\n",
+            "model = CausalRank(\n",
+            "    treatment=\"treatment\",\n",
+            "    outcome=\"outcome\",\n",
+            "    confounders=[\"x1\", \"x2\", \"x3\", \"x4\"],\n",
+            "    cross_fit=3,\n",
+            "    n_bootstrap=100,\n",
+            "    confidence_level=0.95,\n",
+            "    higher_is_better=True,  # rank 1 = 最高转化率；成本型指标用 False\n",
+            "    random_state=2026,\n",
+            ")\n",
+            "result = model.fit(ds.df)\n",
+            "print(\"inference_available:\", result.inference_available)\n",
+            "display(result.effects.to_dataframe().round(4))",
+        ],
+    },
+    {
+        "cell_type": "markdown",
+        "source": [
+            "## 2. 两两同时区间（Bonferroni）\n",
+            "\n",
+            "差值标准误使用**联合**协方差：$\\widehat{SE}(\\hat d_{ij})=\\sqrt{\\hat\\Sigma_{ii}+\\hat\\Sigma_{jj}-2\\hat\\Sigma_{ij}}$，\n",
+            "臂间相关性被正确带入。`decision` 的语义是“更好”方向（受 `higher_is_better` 影响）：\n",
+            "\n",
+            "- `CI_lower(i-j) > 0` → `i_better`（确认 $i$ 优于 $j$）；\n",
+            "- `CI_upper(i-j) < 0` → `j_better`；\n",
+            "- 其他 → `inconclusive`：**不能**解读为两者相等。",
+        ],
+    },
+    {
+        "cell_type": "code",
+        "source": [
+            "pairs = result.pairwise.to_dataframe()\n",
+            "display(pairs.round(4))\n",
+            "print(\"M =\", result.pairwise.n_pairs, \", z_crit =\", round(result.pairwise.z_crit, 4))\n",
+            "print(\"\\n可确认关系（confirmed）：\")\n",
+            "display(result.pairwise.confirmed[[\"label_i\", \"label_j\", \"diff\", \"ci_low\", \"ci_high\", \"decision\"]].round(4))",
+        ],
+    },
+    {
+        "cell_type": "markdown",
+        "source": [
+            "## 3. 保守排名置信区间 $[1+B_i,\\ K-W_i]$\n",
+            "\n",
+            "`point_rank` 为点排名（并列共享名次，`point_tie` 显式标记）；\n",
+            "`rank_low/rank_high` 是同时覆盖意义上的保守区间——分不出优劣时区间变宽，\n",
+            "这是诚实的答案，而不是按点估计强行给出全序。",
+        ],
+    },
+    {
+        "cell_type": "code",
+        "source": [
+            "ranks = result.ranks.to_dataframe()\n",
+            "display(ranks)\n",
+            "print(result.metadata[\"rank_note\"])",
+        ],
+    },
+    {
+        "cell_type": "markdown",
+        "source": [
+            "## 4. K=2 退化检验与手算对照\n",
+            "\n",
+            "规格验收：K=2 时 $M=1$，$z_{1-\\alpha/(2M)}=z_{1-\\alpha/2}$，\n",
+            "同时区间退化为常规两方案比较。下面用手算数字验证内核。",
+        ],
+    },
+    {
+        "cell_type": "code",
+        "source": [
+            "from scipy.stats import norm\n",
+            "\n",
+            "sigma = np.array([[0.0025, 0.0018], [0.0018, 0.0016]])\n",
+            "r2 = rank_from_estimates({\"A\": 0.5, \"B\": 0.4}, sigma)\n",
+            "display(r2.pairwise.to_dataframe().round(6))\n",
+            "display(r2.ranks.to_dataframe())\n",
+            "se_diff = np.sqrt(0.0025 + 0.0016 - 2 * 0.0018)\n",
+            "print(\"手算 se_diff =\", se_diff)\n",
+            "print(\"手算 z_{0.975} =\", norm.ppf(0.975), \" 内核 z_crit =\", r2.pairwise.z_crit)\n",
+            "assert abs(r2.pairwise.z_crit - norm.ppf(0.975)) < 1e-12",
+        ],
+    },
+    {
+        "cell_type": "markdown",
+        "source": [
+            "## 5. 真并列红线：`equal_effects` 场景\n",
+            "\n",
+            "三个 Treatment 的潜在结果分布完全相同。此时真实名次不唯一（每个臂的\n",
+            "真实名次范围都是 $[1,K]$），正确输出是**没有可确认关系、排名区间保持全宽**。\n",
+            "若某次抽样里噪声“制造”出确定排名，会以 `confirmed` 对的形式暴露出来，\n",
+            "而不会被包装成结论。",
+        ],
+    },
+    {
+        "cell_type": "code",
+        "source": [
+            "ds_eq = make_dataset(\"equal_effects\", n=1500, random_state=7)\n",
+            "result_eq = CausalRank(\n",
+            "    treatment=\"treatment\",\n",
+            "    outcome=\"outcome\",\n",
+            "    confounders=[\"x1\", \"x2\", \"x3\", \"x4\"],\n",
+            "    cross_fit=3,\n",
+            "    n_bootstrap=80,\n",
+            "    bootstrap_min_successes=30,\n",
+            "    random_state=7,\n",
+            ").fit(ds_eq.df)\n",
+            "display(result_eq.ranks.to_dataframe())\n",
+            "print(\"confirmed pairs:\", int(result_eq.pairwise.to_dataframe()[\"confirmed\"].sum()))",
+        ],
+    },
+    {
+        "cell_type": "markdown",
+        "source": [
+            "## 6. 边界与红线\n",
+            "\n",
+            "1. `inconclusive` **不是**相等的证据；“差异不显著”与“效果相等”是两个命题；\n",
+            "2. 排名区间依赖**同时**差值区间与渐近正态近似，不是无条件保证；\n",
+            "   用 `scripts/run_rank_validation.py` 做覆盖率与假确认率的模拟检验；\n",
+            "3. 不要把 bootstrap 里点排名第一的频次当“最优概率”；\n",
+            "4. 单项 CI 重叠不能代替两两显著性检验；\n",
+            "5. 不变性（规格验收）：Treatment 重排只置换行；效果加共同常数不改变排名结论；\n",
+            "   `higher_is_better=False` 时优劣方向与名次同步翻转。\n",
+            "\n",
+            "定义与协议见 `docs/methodology.md` 与 `docs/simulation_protocol.md`。",
+        ],
+    },
+]
+
+
 def _notebook(cells: list[dict[str, object]]) -> dict[str, object]:
     return {
         "cells": [
@@ -424,6 +600,7 @@ def build() -> None:
     for filename, cells in (
         ("01_gbm_iptw_from_raw_data.ipynb", CELLS),
         ("02_joint_bootstrap.ipynb", CELLS_02),
+        ("03_causal_ranking.ipynb", CELLS_03),
     ):
         out = root / filename
         out.write_text(

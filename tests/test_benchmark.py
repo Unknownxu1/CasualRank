@@ -126,3 +126,102 @@ def test_bootstrap_se_matches_empirical_variability() -> None:
     coverage = summary["coverage"].to_numpy(dtype=float)
     assert np.all(coverage >= 0.80), summary
     assert np.all(coverage <= 1.0), summary
+
+
+@pytest.mark.slow
+def test_rank_benchmark_reports_tie_aware_coverage() -> None:
+    """Phase 3 gate: rank confidence sets vs tie-aware truth on ``equal_effects``.
+
+    With truly equal potential-outcome means every admissible rank lies in
+    ``[1, K]``, so the strict coverage definition can only hold when the
+    simultaneous intervals confirm nothing -- exactly the red line that noise
+    must not produce a determined ranking.
+    """
+    from causalrank.simulation import run_rank_benchmark
+
+    from .conftest import FAST_GBM
+
+    res = run_rank_benchmark(
+        "equal_effects",
+        n=500,
+        n_replications=3,
+        n_bootstrap=10,
+        random_state=11,
+        bootstrap_min_successes=4,
+        estimator_kwargs={"gbm_params": dict(FAST_GBM)},
+    )
+    summary = res.summary
+    assert (summary["true_rank_min"] == 1).all()
+    assert (summary["true_rank_max"] == 3).all()
+    assert (summary["coverage"] == 1.0).all(), summary
+    runs = res.run_summary
+    assert int(runs["n_failed"].iloc[0]) == 0
+    assert float(runs["any_confirmed_rate"].iloc[0]) == 0.0
+    assert float(runs["all_rank_sets_full_rate"].iloc[0]) == 1.0
+
+
+@pytest.mark.slow
+def test_rank_benchmark_schema_and_confirmed_relations() -> None:
+    """Separated truths: the best arm must be pinned to rank 1 in the point ranks
+    and the benchmark must record the per-arm coverage columns."""
+    from causalrank.simulation import run_rank_benchmark
+
+    from .conftest import FAST_GBM
+
+    res = run_rank_benchmark(
+        "confounded",
+        n=800,
+        n_replications=2,
+        n_bootstrap=10,
+        random_state=12,
+        bootstrap_min_successes=4,
+        estimator_kwargs={"gbm_params": dict(FAST_GBM)},
+    )
+    rep = res.replications
+    for col in ("true_rank_min", "true_rank_max", "rank_low", "rank_high", "covers"):
+        assert col in rep.columns
+    # truth is unique here (tau = (0, 0.35, -0.15))
+    assert (rep["true_rank_min"] == rep["true_rank_max"]).all()
+    best = rep[rep["true_rank_min"] == 1]
+    assert set(best["label"]) == {"B"}
+    assert res.summary["coverage"].notna().all()
+
+
+def test_rank_benchmark_returns_recorded_failures_when_all_runs_fail() -> None:
+    """Regression (P3): an all-failed batch must return the failure records,
+    not crash while summarising an empty table."""
+    from causalrank.simulation import run_rank_benchmark
+
+    res = run_rank_benchmark(
+        "confounded",
+        n=2,  # far too small: every fit raises, recorded as status="failed"
+        n_replications=1,
+        n_bootstrap=2,
+        random_state=3,
+        bootstrap_min_successes=2,
+    )
+    runs = res.runs
+    assert list(runs["status"]) == ["failed"]
+    assert "error" in runs.columns and str(runs["error"].iloc[0])
+    # well-formed empty tables instead of a KeyError on 'label'
+    assert res.replications.empty
+    assert list(res.summary.columns) == [
+        "scenario",
+        "n",
+        "label",
+        "n_replications",
+        "mu_true",
+        "true_rank_min",
+        "true_rank_max",
+        "coverage",
+        "coverage_mc_se",
+        "mean_rank_width",
+        "confidence_level",
+        "n_bootstrap",
+        "higher_is_better",
+    ]
+    assert res.summary.empty
+    run_summary = res.run_summary
+    assert int(run_summary["n_failed"].iloc[0]) == 1
+    assert int(run_summary["n_replications"].iloc[0]) == 1
+    assert np.isnan(float(run_summary["any_confirmed_rate"].iloc[0]))

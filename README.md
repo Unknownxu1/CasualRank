@@ -4,12 +4,13 @@
 uncertainty quantification, and statistically defensible treatment ranking from
 observational data.**
 
-> **当前状态：Phase 0–2（v0.2.0）。**
+> **当前状态：Phase 0–3（v0.3.0，MVP 完成）。**
 > 已实现：原始 DataFrame → 多分类 GBM 倾向得分 → Hájek IPTW → `mu_a = E[Y(a)]` 估计
 > + 重叠 / ESS / SMD 诊断与质量门控；**联合 Bootstrap 协方差、SE / 单项 CI**
-> （`n_bootstrap` 显式开启）；失败轮披露与推断阻断；SE/覆盖率 Monte Carlo 校准。
-> **尚未实现（Phase 3+）**：两两同时区间、可确认优劣关系、排名置信集
-> （`result.ranks / pairwise` 为 None）。请勿把点估计排序当作已确立的统计排名。
+> （`n_bootstrap` 显式开启）；失败轮披露与推断阻断；**Bonferroni 两两同时区间、
+> 可确认优劣关系、保守排名置信集** `[1+B_i, K-W_i]`（`result.pairwise / result.ranks`）。
+> **尚未实现（后续）**：max-T/stepdown 排名推断、AIPW/OW、可视化报告（Phase 4）。
+> 点估计排序不是统计上确立的排名；`inconclusive` 不是相等的证据。
 
 ---
 
@@ -73,9 +74,11 @@ model = CausalRank(
 )
 result = model.fit(df)
 
-print(result.summary())              # 估计值、SE/CI、诊断与质量门控
+print(result.summary())              # 估计值、SE/CI、排名置信集、诊断与质量门控
 print(result.effects.to_dataframe()) # mu_a、se、ci、原始均值、权重、ESS
 print(result.covariance)             # K×K 联合 Bootstrap 协方差
+print(result.ranks.to_dataframe())   # 点排名 + 排名置信区间 [1+B_i, K-W_i]
+print(result.pairwise.to_dataframe())# 两两同时区间与可确认优劣关系
 print(result.diagnostics.summary())  # overlap / 权重 / SMD 诊断
 for w in result.diagnostics.warnings:
     print(w.level, w.code, w.message)
@@ -84,8 +87,18 @@ for w in result.diagnostics.warnings:
 `n_bootstrap` 是**显式开关**：默认 `None` 只输出点估计与诊断（秒级）；设为 300 会每轮
 重新拟合全部协议来估计协方差（分钟级，可 `n_jobs` 并行且结果与串行逐位一致）。
 
-低层排名内核（Phase 3 才提供）将在后续阶段开放。当前版本用于**验证估计器与不确定性
-量化本身**：估计定义、诊断、模拟基准与 SE/覆盖率校准。
+低层排名内核可单独验证（规格 2.2）：
+
+```python
+from causalrank.inference import rank_from_estimates
+
+ranking = rank_from_estimates(
+    estimates={"A": 0.25, "B": 0.24, "C": 0.17},
+    covariance=sigma,
+    confidence_level=0.95,
+    method="bonferroni",
+)
+```
 
 ## 估计方法（一句话版）
 
@@ -106,7 +119,9 @@ for w in result.diagnostics.warnings:
 （独立大规模 Monte Carlo 参考 + MC 标准误），内置 8 个场景（随机化、混杂、强混杂、弱重叠、
 稀有 Treatment、效应相等、效应接近、混合类型 + 缺失）。模拟协议见
 [`docs/simulation_protocol.md`](docs/simulation_protocol.md)，端到端示例见
-[`examples/01_gbm_iptw_from_raw_data.ipynb`](examples/01_gbm_iptw_from_raw_data.ipynb)。
+[`examples/01_gbm_iptw_from_raw_data.ipynb`](examples/01_gbm_iptw_from_raw_data.ipynb)、
+[`examples/02_joint_bootstrap.ipynb`](examples/02_joint_bootstrap.ipynb)、
+[`examples/03_causal_ranking.ipynb`](examples/03_causal_ranking.ipynb)。
 
 ## 项目结构
 

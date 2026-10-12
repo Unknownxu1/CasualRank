@@ -55,10 +55,13 @@ $$\mu_{\mathrm{true}}[a] = E_X\big[P(Y(a)=1\mid X)\big] \approx \frac{1}{N_{\mat
 - 拟合失败率、Bootstrap 成功率（逐轮 `status/error` 记录）；
 - **SE 校准**（`run_se_benchmark`）：`se_ratio = 平均 bootstrap SE / mu_hat 经验标准差`；
   单项 CI **覆盖率**与 MC 误差 $\sqrt{\hat p(1-\hat p)/R}$；
+- **排名推断校准**（`run_rank_benchmark`，Phase 3）：排名区间覆盖率（并列感知真值
+  `[1+#严格更好, K-#严格更差]`，要求区间覆盖全部可行名次）、区间宽度、
+  以及真并列场景（`equal_effects`）下的**假确认率** `any_confirmed_rate`；
 - 运行时长与可复现性（固定种子逐位一致）。
 
-Bonferroni **联合排名覆盖**率在 Phase 3 引入排名推断后统计；届时同样必须报告
-Monte Carlo 误差，不得因 0.946 vs 0.95 就断定方法失效。
+Bonferroni 联合排名覆盖率由 `run_rank_benchmark` / `scripts/run_rank_validation.py`
+统计；同样必须报告 Monte Carlo 误差，不得因 0.946 vs 0.95 就断定方法失效。
 
 ## 5. 快测试 vs 研究基准
 
@@ -73,10 +76,15 @@ uv run python scripts/run_simulation.py --scenario confounded --n 1500 6000 \
 uv run python scripts/run_se_validation.py --scenario confounded --n 1200 \
     --replications 24 --bootstrap 150 --cross-fit 5 --n-jobs 4 \
     --out artifacts/se_validation.csv
+
+uv run python scripts/run_rank_validation.py --scenario equal_effects --n 1200 \
+    --replications 24 --bootstrap 150 --cross-fit 5 --n-jobs 4 \
+    --out artifacts/rank_validation.csv
 ```
 
   前者输出逐重复表、臂级 Bias/RMSE 与运行级失败率/门控/告警触发率；
-  后者输出 `se_ratio`（bootstrap SE vs 经验标准差）与 CI 覆盖率（含 MC 误差）。
+  中者输出 `se_ratio`（bootstrap SE vs 经验标准差）与 CI 覆盖率（含 MC 误差）；
+  后者输出排名区间覆盖率（并列感知真值）与真并列下的假确认率。
 
 ## 6. 已知的验证局限
 

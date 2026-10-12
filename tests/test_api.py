@@ -77,6 +77,98 @@ def test_result_schema_and_phase1_flags() -> None:
     assert np.all((est["mu"] >= 0) & (est["mu"] <= 1))
 
 
+def test_phase3_ranking_filled_when_bootstrap_enabled() -> None:
+    """End-to-end: joint bootstrap covariance feeds pairwise + rank inference."""
+    from .conftest import FAST_GBM
+
+    ds = make_dataset("confounded", n=900, random_state=21)
+    result = _fit(
+        ds.df,
+        gbm_params=dict(FAST_GBM),
+        n_bootstrap=12,
+        bootstrap_min_successes=5,
+    )
+    assert result.inference_available is True
+    assert result.covariance is not None and result.covariance.shape == (3, 3)
+    assert result.pairwise is not None
+    assert result.ranks is not None
+
+    pairs = result.pairwise.to_dataframe()
+    assert list(pairs.columns) == [
+        "label_i",
+        "label_j",
+        "mu_i",
+        "mu_j",
+        "diff",
+        "se_diff",
+        "ci_low",
+        "ci_high",
+        "z_crit",
+        "n_pairs",
+        "confidence_level",
+        "decision",
+        "confirmed",
+        "point_tie",
+        "degenerate_se",
+    ]
+    assert pairs.shape[0] == 3  # K(K-1)/2
+    assert set(pairs["decision"]) <= {"i_better", "j_better", "inconclusive"}
+
+    ranks = result.ranks.to_dataframe()
+    assert list(ranks.columns) == [
+        "label",
+        "mu",
+        "point_rank",
+        "rank_low",
+        "rank_high",
+        "n_confirmed_better",
+        "n_confirmed_worse",
+        "point_tie",
+    ]
+    assert sorted(ranks["label"]) == sorted(ds.config.labels)
+    assert (ranks["rank_low"] <= ranks["point_rank"]).all()
+    assert (ranks["point_rank"] <= ranks["rank_high"]).all()
+    # spec user story: result.ranks.to_dataframe() is the documented access
+    assert result.ranks.to_dataframe().shape == ranks.shape
+
+    text = result.summary()
+    assert "rank confidence" in text.lower() or "rank point estimates" in text.lower()
+    assert "bonferroni" in text.lower()
+    assert result.metadata["rank_method"] == "bonferroni"
+    assert result.metadata["higher_is_better"] is True
+    assert "rank_note" in result.metadata
+    assert result.to_json()  # machine-readable dump carries the ranking
+
+
+def test_phase3_ranking_respects_higher_is_better_flag() -> None:
+    """lower-is-better outcomes flip the 'better' side of every decision."""
+    from .conftest import FAST_GBM
+
+    ds = make_dataset("confounded", n=900, random_state=22)
+    higher = _fit(
+        ds.df,
+        gbm_params=dict(FAST_GBM),
+        n_bootstrap=10,
+        bootstrap_min_successes=5,
+    )
+    lower = _fit(
+        ds.df,
+        gbm_params=dict(FAST_GBM),
+        n_bootstrap=10,
+        bootstrap_min_successes=5,
+        higher_is_better=False,
+    )
+    assert higher.ranks is not None and lower.ranks is not None
+    flip = {"i_better": "j_better", "j_better": "i_better", "inconclusive": "inconclusive"}
+    hp = higher.pairwise.to_dataframe()
+    lp = lower.pairwise.to_dataframe()
+    assert list(hp["decision"]) == [flip[d] for d in lp["decision"]]
+    hr = higher.ranks.to_dataframe().set_index("label")
+    lr = lower.ranks.to_dataframe().set_index("label")
+    assert (hr["point_rank"] + lr["point_rank"] == 4).all()  # K=3: ranks mirror
+    assert lower.metadata["higher_is_better"] is False
+
+
 def test_summary_states_missing_inference() -> None:
     ds = make_dataset("randomized", n=600, random_state=6)
     result = _fit(ds.df)

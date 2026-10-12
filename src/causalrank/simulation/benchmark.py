@@ -390,3 +390,329 @@ def summarize_runs(runs: pd.DataFrame) -> pd.DataFrame:
             row[f"warn_{code}_rate"] = rate
         out.append(row)
     return pd.DataFrame(out)
+
+
+# ---------------------------------------------------------------------------
+# Phase 3: rank confidence-set coverage benchmark
+# ---------------------------------------------------------------------------
+@dataclass
+class RankBenchmarkResult:
+    """Rank-inference validation: per-arm coverage rows and run-level summary.
+
+    ``runs`` keeps one row per replication (``status`` / ``error`` included),
+    so a batch where every fit failed still returns its failure records instead
+    of crashing while summarising an empty table.
+    """
+
+    replications: pd.DataFrame
+    summary: pd.DataFrame
+    run_summary: pd.DataFrame
+    runs: pd.DataFrame
+    scenario: str
+    n: int
+    n_bootstrap: int
+
+    def __str__(self) -> str:  # pragma: no cover - convenience
+        return (
+            f"RankBenchmarkResult(scenario={self.scenario!r}, n={self.n}, "
+            f"n_bootstrap={self.n_bootstrap}):\n{self.summary}\n{self.run_summary}"
+        )
+
+
+#: Stable schemas so all-failed batches still return well-formed empty tables.
+_RANK_REPLICATION_COLUMNS: tuple[str, ...] = (
+    "scenario",
+    "n",
+    "replication",
+    "seed",
+    "label",
+    "mu_true",
+    "true_rank_min",
+    "true_rank_max",
+    "inference_available",
+    "mu_hat",
+    "point_rank",
+    "rank_low",
+    "rank_high",
+    "rank_width",
+    "covers",
+)
+
+_RANK_RUN_COLUMNS: tuple[str, ...] = (
+    "scenario",
+    "n",
+    "replication",
+    "seed",
+    "status",
+    "error",
+    "n_confirmed_pairs",
+    "any_confirmed",
+    "all_rank_sets_full",
+    "inference_available",
+)
+
+_RANK_SUMMARY_COLUMNS: tuple[str, ...] = (
+    "scenario",
+    "n",
+    "label",
+    "n_replications",
+    "mu_true",
+    "true_rank_min",
+    "true_rank_max",
+    "coverage",
+    "coverage_mc_se",
+    "mean_rank_width",
+    "confidence_level",
+    "n_bootstrap",
+    "higher_is_better",
+)
+
+_RANK_RUN_SUMMARY_COLUMNS: tuple[str, ...] = (
+    "scenario",
+    "n",
+    "n_replications",
+    "n_failed",
+    "blocked_rate",
+    "any_confirmed_rate",
+    "mean_n_confirmed_pairs",
+    "all_rank_sets_full_rate",
+    "confidence_level",
+    "n_bootstrap",
+)
+
+
+def run_rank_benchmark(
+    scenario: str | DGPConfig = "confounded",
+    n: int = 2_000,
+    n_replications: int = 20,
+    n_bootstrap: int = 200,
+    random_state: int = 2026,
+    cross_fit: int | None = None,
+    confidence_level: float = 0.95,
+    higher_is_better: bool = True,
+    n_jobs: int = 1,
+    bootstrap_min_successes: int = 30,
+    estimator_kwargs: dict[str, Any] | None = None,
+) -> RankBenchmarkResult:
+    """Validate the rank confidence sets against the known truth of the DGP.
+
+    Per replication the full pipeline runs *with* the joint bootstrap, so every
+    replication yields simultaneous pairwise intervals and the rank confidence
+    sets ``[L_i, U_i] = [1 + B_i, K - W_i]``. The truth is tie-aware: for arm
+    ``i``
+
+    ``true_rank_min_i = 1 + #{j : mu_true_j strictly better than i}``,
+    ``true_rank_max_i = K - #{j : mu_true_j strictly worse than i}``,
+
+    which collapses to a single value whenever the true effects are distinct
+    and widens to an interval under true ties (e.g. ``equal_effects``).
+
+    ``covers_i`` is ``L_i <= true_rank_min_i`` and ``true_rank_max_i <= U_i``:
+    the set must contain **every** admissible true rank. Under true ties this
+    is exactly the red line from PROJECT_SPEC.md 3.6 - noise must not produce
+    a determined ranking - and any spurious confirmed pair shows up as a
+    non-covering interval and in ``any_confirmed_rate``.
+
+    Monte Carlo error of the coverage proportion is reported as
+    ``sqrt(p (1 - p) / R)``. The results are a simulation-based check of the
+    joint-bootstrap + asymptotic-normal ranking statement, not a universal
+    inference guarantee.
+    """
+    config = get_scenario(scenario) if isinstance(scenario, str) else scenario
+    dgp = SyntheticDGP(config)
+    mu_true, _ = dgp.population_mean()
+    k = config.n_treatments
+
+    score = np.asarray(mu_true, dtype=float)
+    if not higher_is_better:
+        score = -score
+    true_rank_min = np.array([1 + int(np.sum(score > score[a])) for a in range(k)], dtype=int)
+    true_rank_max = np.array([k - int(np.sum(score < score[a])) for a in range(k)], dtype=int)
+
+    root = np.random.SeedSequence(int(random_state))
+    seeds = [int(np.asarray(c.generate_state(1))[0]) for c in root.spawn(int(n_replications))]
+
+    rows: list[dict[str, Any]] = []
+    run_rows: list[dict[str, Any]] = []
+    extra_kwargs: dict[str, Any] = dict(estimator_kwargs or {})
+    for rep, seed in enumerate(seeds):
+        df = dgp.sample(int(n), random_state=seed)
+        model = CausalRank(
+            treatment=TREATMENT_COL,
+            outcome=OUTCOME_COL,
+            confounders=list(CONFOUNDER_COLS),
+            random_state=seed,
+            cross_fit=cross_fit,
+            n_bootstrap=int(n_bootstrap),
+            bootstrap_min_successes=int(bootstrap_min_successes),
+            confidence_level=confidence_level,
+            higher_is_better=higher_is_better,
+            n_jobs=n_jobs,
+            **extra_kwargs,
+        )
+        try:
+            result = model.fit(df)
+        except Exception as exc:  # recorded, never aborts the batch
+            run_rows.append(
+                {
+                    "scenario": config.name,
+                    "n": int(n),
+                    "replication": rep,
+                    "seed": seed,
+                    "status": "failed",
+                    "error": f"{type(exc).__name__}: {exc}",
+                    "n_confirmed_pairs": np.nan,
+                    "any_confirmed": np.nan,
+                    "all_rank_sets_full": np.nan,
+                    "inference_available": False,
+                }
+            )
+            continue
+
+        ranks_obj = result.ranks
+        pairs_obj = result.pairwise
+        if result.inference_available and ranks_obj is not None and pairs_obj is not None:
+            ranks_df = ranks_obj.to_dataframe().set_index("label")
+            pairs_df = pairs_obj.to_dataframe()
+            n_confirmed = int(pairs_df["confirmed"].astype(bool).sum())
+            full = bool((ranks_df["rank_low"] == 1).all() and (ranks_df["rank_high"] == k).all())
+            available = True
+        else:
+            ranks_df = None
+            n_confirmed = -1
+            full = False
+            available = False
+
+        run_rows.append(
+            {
+                "scenario": config.name,
+                "n": int(n),
+                "replication": rep,
+                "seed": seed,
+                "status": "ok",
+                "error": "",
+                "n_confirmed_pairs": n_confirmed,
+                "any_confirmed": bool(n_confirmed > 0),
+                "all_rank_sets_full": full,
+                "inference_available": available,
+            }
+        )
+
+        for a, label in enumerate(config.labels):
+            row: dict[str, Any] = {
+                "scenario": config.name,
+                "n": int(n),
+                "replication": rep,
+                "seed": seed,
+                "label": label,
+                "mu_true": float(mu_true[a]),
+                "true_rank_min": int(true_rank_min[a]),
+                "true_rank_max": int(true_rank_max[a]),
+                "inference_available": available,
+            }
+            if available and ranks_df is not None:
+                rank_low = int(ranks_df.loc[label, "rank_low"])
+                rank_high = int(ranks_df.loc[label, "rank_high"])
+                row.update(
+                    {
+                        "mu_hat": float(ranks_df.loc[label, "mu"]),
+                        "point_rank": int(ranks_df.loc[label, "point_rank"]),
+                        "rank_low": rank_low,
+                        "rank_high": rank_high,
+                        "rank_width": rank_high - rank_low + 1,
+                        "covers": bool(
+                            rank_low <= true_rank_min[a] and true_rank_max[a] <= rank_high
+                        ),
+                    }
+                )
+            else:
+                row.update(
+                    {
+                        "mu_hat": np.nan,
+                        "point_rank": np.nan,
+                        "rank_low": np.nan,
+                        "rank_high": np.nan,
+                        "rank_width": np.nan,
+                        "covers": np.nan,
+                    }
+                )
+            rows.append(row)
+
+    replications = pd.DataFrame(rows)
+    if replications.empty:
+        replications = pd.DataFrame(columns=_RANK_REPLICATION_COLUMNS)
+    runs = pd.DataFrame(run_rows)
+    if runs.empty:
+        runs = pd.DataFrame(columns=_RANK_RUN_COLUMNS)
+
+    summary_rows: list[dict[str, Any]] = []
+    if "label" in replications.columns:
+        for label, grp in replications.groupby("label", sort=True):
+            ok = grp[grp["inference_available"] == True]  # noqa: E712
+            p = float(ok["covers"].mean()) if not ok.empty else np.nan
+            mc_se = (
+                float(np.sqrt(p * (1 - p) / max(ok.shape[0], 1))) if ok.shape[0] else np.nan
+            )
+            summary_rows.append(
+                {
+                    "scenario": config.name,
+                    "n": int(n),
+                    "label": label,
+                    "n_replications": int(ok.shape[0]),
+                    "mu_true": float(grp["mu_true"].iloc[0]),
+                    "true_rank_min": int(grp["true_rank_min"].iloc[0]),
+                    "true_rank_max": int(grp["true_rank_max"].iloc[0]),
+                    "coverage": p,
+                    "coverage_mc_se": mc_se,
+                    "mean_rank_width": (
+                        float(ok["rank_width"].mean()) if not ok.empty else np.nan
+                    ),
+                    "confidence_level": float(confidence_level),
+                    "n_bootstrap": int(n_bootstrap),
+                    "higher_is_better": bool(higher_is_better),
+                }
+            )
+    summary = pd.DataFrame(summary_rows, columns=list(_RANK_SUMMARY_COLUMNS))
+
+    ok_runs = runs[runs["status"] == "ok"]
+    avail = ok_runs[ok_runs["inference_available"] == True]  # noqa: E712
+    n_ok = int(ok_runs.shape[0])
+    run_summary = pd.DataFrame(
+        [
+            {
+                "scenario": config.name,
+                "n": int(n),
+                "n_replications": int(runs.shape[0]),
+                "n_failed": int((runs["status"] != "ok").sum()),
+                "blocked_rate": (
+                    float(1.0 - (avail.shape[0] / n_ok)) if n_ok else np.nan
+                ),
+                "any_confirmed_rate": (
+                    float(avail["any_confirmed"].astype(bool).mean())
+                    if not avail.empty
+                    else np.nan
+                ),
+                "mean_n_confirmed_pairs": (
+                    float(avail["n_confirmed_pairs"].mean()) if not avail.empty else np.nan
+                ),
+                "all_rank_sets_full_rate": (
+                    float(avail["all_rank_sets_full"].astype(bool).mean())
+                    if not avail.empty
+                    else np.nan
+                ),
+                "confidence_level": float(confidence_level),
+                "n_bootstrap": int(n_bootstrap),
+            }
+        ],
+        columns=list(_RANK_RUN_SUMMARY_COLUMNS),
+    )
+
+    return RankBenchmarkResult(
+        replications=replications,
+        summary=summary,
+        run_summary=run_summary,
+        runs=runs,
+        scenario=config.name,
+        n=int(n),
+        n_bootstrap=int(n_bootstrap),
+    )

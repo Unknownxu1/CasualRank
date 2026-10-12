@@ -210,11 +210,13 @@ def test_end_to_end_fit_fills_se_ci_and_covariance() -> None:
     meta = result.metadata["bootstrap"]
     assert meta["n_success"] == 24 and meta["usable"] is True
     assert result.metadata["inference_available"] is True
-    # rank inference stays Phase 3
-    assert result.ranks is None and result.pairwise is None
+    # rank inference (Phase 3) is filled from the joint covariance
+    assert result.ranks is not None and result.pairwise is not None
+    assert result.ranks.to_dataframe().shape[0] == 3
+    assert result.pairwise.to_dataframe().shape[0] == 3
     text = result.summary()
     assert "NOT available" not in text
-    assert "Phase 3" in text
+    assert "Bonferroni" in text
 
 
 def test_disabled_bootstrap_keeps_phase1_behaviour() -> None:
