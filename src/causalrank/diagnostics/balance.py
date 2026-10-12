@@ -117,6 +117,13 @@ def _group_stats(
     the data carry a large offset (e.g. values around 1e9), turning a real SMD
     into ``inf``/``NaN``. The caller additionally centres every column before
     calling this, so the means themselves are also computed near zero.
+
+    Exact constancy is detected from ``max == min`` over the arm's valid
+    entries and forces ``sd = 0``. The two-pass sum alone cannot do this: the
+    mean itself carries ~1 ulp of rounding, so a truly constant column leaves
+    a tiny nonzero ``ss`` and a spurious ``sd`` around 1e-16 — which, once
+    used as the pooled reference, inflates an SMD into the 1e14 range instead
+    of the documented ``+/-inf`` (methodology: ``s_ref = 0``).
     """
     Zg = Z[mask]
     Vg = valid[mask]
@@ -132,6 +139,11 @@ def _group_stats(
         centered = np.where(Vg, Zg - np.where(n_obs > 0, raw_mean, 0.0), 0.0)
         ss = (centered * centered).sum(axis=0)
         sd = np.where(n_obs > 1, np.sqrt(np.maximum(ss, 0.0) / (n_obs - 1)), np.nan)
+        # constant within the arm (max == min on the observed entries)?
+        present = Vg.astype(bool)
+        maxv = np.where(present, Zg, -np.inf).max(axis=0)
+        minv = np.where(present, Zg, np.inf).min(axis=0)
+        sd = np.where((maxv == minv) & (n_obs > 1), 0.0, sd)
     return raw_mean, w_mean, sd
 
 

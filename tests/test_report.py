@@ -262,3 +262,145 @@ class TestBlockedInferenceReport:
         assert boot["usable"] is False
         # ranks section must fall back to the explicit note, not render numbers
         assert "Rank confidence sets" in html_text
+
+
+class TestInfiniteSmdNotMissing:
+    """Review P1: +/-inf SMD is a real value, not missing data."""
+
+    def test_fmt_float_distinguishes_inf_from_nan(self) -> None:
+        from causalrank.visualization.report import fmt_float
+
+        assert fmt_float(float("inf")) == "&infin;"
+        assert fmt_float(float("-inf")) == "&minus;&infin;"
+        assert fmt_float(float("nan")) == "&mdash;"  # NaN still means missing
+        assert fmt_float(0.12345) == "0.1235"
+
+    def test_degenerate_covariate_renders_infinity(self) -> None:
+        # constant within each arm but different across arms -> zero
+        # within-arm variance -> SMD is +/-inf by definition
+        rng = np.random.default_rng(11)
+        n = 300
+        treatment = np.array(["A", "B", "C"] * (n // 3))
+        x_deg = np.select([treatment == "A", treatment == "B"], [0.0, 1.0], default=2.0)
+        df = pd.DataFrame(
+            {
+                "x1": rng.normal(size=n),
+                "x_deg": x_deg,
+                "treatment": treatment,
+                "outcome": (rng.uniform(size=n) < 0.5).astype(float),
+            }
+        )
+        result = CausalRank(
+            treatment="treatment",
+            outcome="outcome",
+            confounders=["x1", "x_deg"],
+            gbm_params=FAST_GBM,
+            random_state=3,
+        ).fit(df)
+        degenerate = result.diagnostics.balance_summary[
+            result.diagnostics.balance_summary["feature"] == "x_deg"
+        ]
+        assert np.isinf(degenerate["max_abs_smd_weighted"]).any()
+        html_text = result.to_html()
+        assert "&infin;" in html_text  # shown as infinity, never as the dash
+        # the balance figure must not emit nan coordinates for infinite values
+        fig = plot_result(result, "balance")
+        assert "nan" not in fig.svg.lower()
+        assert "∞" in fig.svg  # off-scale marker present
+
+
+class TestBalanceAxisCoversWeighted:
+    """Review P1: the SMD axis bound must include the weighted series."""
+
+    def test_axis_covers_weighted_imbalance(self, inferred_result: CausalRankResult) -> None:
+        import copy
+        import re
+
+        result = copy.deepcopy(inferred_result)
+        bs = result.diagnostics.balance_summary.copy()
+        bs["max_abs_smd_unweighted"] = 0.15
+        bs["max_abs_smd_weighted"] = 0.80  # weighting made it much worse
+        result.diagnostics.balance_summary = bs
+        fig = plot_result(result, "balance")
+        ticks = [float(m) for m in re.findall(r">(\d+\.\d\d)</text>", fig.svg)]
+        assert ticks, "axis ticks missing"
+        assert max(ticks) >= 0.80, f"axis max {max(ticks)} would clip a weighted SMD of 0.80"
+
+
+class TestIdentifierLabels:
+    """Review P1: labels are identifiers, never float-formatted numbers."""
+
+    def test_integer_labels_not_float_formatted(self) -> None:
+        rng = np.random.default_rng(5)
+        n = 150
+        df = pd.DataFrame(
+            {
+                "x1": rng.normal(size=n),
+                "x2": rng.normal(size=n),
+                "treatment": np.tile([1, 2, 3], n // 3),
+                "outcome": (rng.uniform(size=n) < 0.5).astype(float),
+            }
+        )
+        result = CausalRank(
+            treatment="treatment",
+            outcome="outcome",
+            confounders=["x1", "x2"],
+            gbm_params=FAST_GBM,
+            random_state=5,
+        ).fit(df)
+        html_text = result.to_html()
+        assert "<td>1</td>" in html_text
+        assert "<td>1.0000</td>" not in html_text
+
+    def test_large_integer_labels_keep_precision(self) -> None:
+        # 2^53 and 2^53+1 are distinct integers that collapse onto the same
+        # float64; labels must survive verbatim for traceability
+        hi, lo = 2**53, 2**53 + 1
+        rng = np.random.default_rng(6)
+        n = 120
+        df = pd.DataFrame(
+            {
+                "x1": rng.normal(size=n),
+                "x2": rng.normal(size=n),
+                "treatment": np.array([hi, lo] * (n // 2)),
+                "outcome": (rng.uniform(size=n) < 0.5).astype(float),
+            }
+        )
+        result = CausalRank(
+            treatment="treatment",
+            outcome="outcome",
+            confounders=["x1", "x2"],
+            gbm_params=FAST_GBM,
+            random_state=6,
+        ).fit(df)
+        html_text = result.to_html()
+        assert str(hi) in html_text
+        assert str(lo) in html_text
+        assert f"{float(lo):.4f}" not in html_text  # no float64 collapse
+
+
+class TestStandaloneFigureContext:
+    """Review P2: a figure distributed alone keeps caption and quality gate."""
+
+    @pytest.mark.parametrize("kind", PLOT_KINDS)
+    def test_svg_carries_caption_and_gate(
+        self, inferred_result: CausalRankResult, kind: str
+    ) -> None:
+        fig = plot_result(inferred_result, kind)  # type: ignore[arg-type]
+        assert fig.caption[:40] in fig.svg  # caption survives line wrapping
+        assert "quality gate" in fig.svg.lower()
+        assert inferred_result.diagnostics.gate.upper() in fig.svg
+
+    def test_saved_svg_keeps_context(self, inferred_result: CausalRankResult, tmp_path) -> None:
+        fig = plot_result(inferred_result, "estimates")
+        out = fig.save(tmp_path / "estimates.svg")
+        text = out.read_text(encoding="utf-8")
+        assert "quality gate" in text.lower()
+        assert "confidence intervals" in text
+
+    def test_html_report_does_not_duplicate_caption(
+        self, inferred_result: CausalRankResult
+    ) -> None:
+        html_text = inferred_result.to_html()
+        assert "fig-caption" not in html_text  # external copy removed
+        assert "Point estimates mu_a with" in html_text  # now inside the SVG

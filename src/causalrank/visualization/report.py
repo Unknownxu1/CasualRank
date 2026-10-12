@@ -54,13 +54,20 @@ def _esc(value: Any) -> str:
 
 
 def fmt_float(value: Any, digits: int = DIGITS) -> str:
-    """Format a number for the report; non-finite values render as a dash."""
+    """Format a number for the report.
+
+    ``NaN`` (missing / not computed) renders as an em dash; ``±inf`` is a
+    *real value* here — a degenerate SMD with zero within-arm variance — and
+    renders as ``∞`` / ``−∞`` so it is never confused with missingness.
+    """
     try:
         val = float(value)
     except (TypeError, ValueError):  # pragma: no cover - defensive
         return "&mdash;"
-    if not np.isfinite(val):
+    if np.isnan(val):
         return "&mdash;"
+    if np.isinf(val):
+        return "&infin;" if val > 0 else "&minus;&infin;"
     return f"{val:.{digits}f}"
 
 
@@ -155,6 +162,14 @@ _BOOL_COLUMNS: frozenset[str] = frozenset(
 #: Integer columns without thousands separators.
 _PLAIN_INT_COLUMNS: frozenset[str] = frozenset({"n_pairs", "base_seed"})
 
+#: Identifier columns are rendered verbatim (HTML-escaped), never through the
+#: numeric formatters: treatment labels are identifiers, not numbers, so an
+#: integer label 1 must stay "1" (not "1.0000") and large integers must not
+#: lose precision through a float64 round-trip.
+_IDENTIFIER_COLUMNS: frozenset[str] = frozenset(
+    {"label", "label_i", "label_j", "feature", "level", "pair"}
+)
+
 
 def _cell(col: str, value: Any) -> str:
     if col in _BOOL_COLUMNS:
@@ -191,7 +206,14 @@ def _df_to_html(df: pd.DataFrame) -> str:
         tds: list[str] = []
         for c in cols:
             v = values[c]
-            if numeric[c]:
+            if c in _IDENTIFIER_COLUMNS:
+                # labels / features / pairs are identifiers: print verbatim so
+                # integer labels stay exact and float formatting never applies
+                if v is None or v is pd.NA or (isinstance(v, float) and not np.isfinite(v)):
+                    tds.append("<td>&mdash;</td>")
+                else:
+                    tds.append(f"<td>{_esc(v)}</td>")
+            elif numeric[c]:
                 tds.append(f"<td>{_cell(c, v)}</td>")
             elif v is None or v is pd.NA or (isinstance(v, float) and not np.isfinite(v)):
                 tds.append("<td>&mdash;</td>")
@@ -248,7 +270,6 @@ table.data td { padding: 6px 10px; border-bottom: 1px solid #e2e8f0;
 table.data tbody tr:hover { background: #f8fafc; }
 .fig { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
        padding: 12px; margin: 12px 0; overflow-x: auto; }
-.fig-caption { font-size: 12px; color: #64748b; margin-top: 6px; }
 details { margin: 10px 0; }
 summary { cursor: pointer; color: #2563eb; font-size: 13px; }
 .formula { font-family: ui-monospace, monospace; font-size: 12.5px;
@@ -279,11 +300,11 @@ class Figure:
     def save(self, path: str | Path) -> Path:
         out = Path(path)
         if out.suffix.lower() == ".html":
+            # the caption and quality gate are already inside the SVG footer
             body = (
                 "<!DOCTYPE html><html><head><meta charset=\"utf-8\">"
                 f"<title>CausalRank figure ({_esc(self.kind)})</title></head>"
                 f"<body style=\"margin:16px\">{self.svg}"
-                f"<p style=\"color:#64748b;font:12px system-ui\">{_esc(self.caption)}</p>"
                 "</body></html>"
             )
             out.write_text(body, encoding="utf-8")
@@ -317,6 +338,55 @@ def _nice_bounds(lo: float, hi: float) -> tuple[float, float]:
         return lo - pad, hi + pad
     pad = 0.08 * (hi - lo)
     return lo - pad, hi + pad
+
+
+def _wrap_text(text: str, max_chars: int = 118) -> list[str]:
+    """Greedy line wrapping for the in-figure footer (approximate width)."""
+    if len(text) <= max_chars:
+        return [text]
+    lines: list[str] = []
+    current = ""
+    for word in text.split(" "):
+        if current and len(current) + 1 + len(word) > max_chars:
+            lines.append(current)
+            current = word
+        else:
+            current = f"{current} {word}" if current else word
+    if current:
+        lines.append(current)
+    return lines
+
+
+_GATE_FOOTER_TEXT: dict[str, str] = {
+    "pass": (
+        "quality gate: PASS - no empirical warnings raised "
+        "(this does not validate the causal assumptions)"
+    ),
+    "caution": "quality gate: CAUTION - read result.diagnostics.warnings before interpreting",
+    "fail": "quality gate: FAIL - do not present these estimates as a reliable causal ranking",
+}
+
+_GATE_FOOTER_COLOR: dict[str, str] = {"pass": "#15803d", "caution": "#b45309", "fail": "#b91c1c"}
+
+
+def _figure_footer(
+    parts: list[str], width: int, height: int, caption: str, gate: str
+) -> int:
+    """Append caption + quality-gate lines *inside* the figure.
+
+    A figure distributed on its own (notebook cell, ``.svg`` export) must
+    carry the same context the full HTML report renders next to it: the
+    caption and the result's quality gate travel with the pixels.
+    """
+    parts.append(
+        f'<line x1="0" y1="{height}" x2="{width}" y2="{height}" stroke="#e2e8f0"/>'
+    )
+    y = height + 15
+    for line in _wrap_text(caption):
+        parts.append(_svg_text(6, y, line, fill="#64748b", size=11))
+        y += 14
+    parts.append(_svg_text(6, y, _GATE_FOOTER_TEXT[gate], fill=_GATE_FOOTER_COLOR[gate], size=11))
+    return y + 14
 
 
 def _estimates_svg(result: CausalRankResult) -> Figure:
@@ -379,9 +449,10 @@ def _estimates_svg(result: CausalRankResult) -> Figure:
         f"Point estimates mu_a with {float(result.metadata.get('confidence_level', 0.95)):.0%} "
         "confidence intervals (joint bootstrap)."
         if has_ci
-        else "Point estimates only — inference is not available in this result."
+        else "Point estimates only - inference is not available in this result."
     )
     parts.append(_svg_text(left, height - 8, "mu_a = E[Y(a)]", fill="#64748b", size=11))
+    height = _figure_footer(parts, width, height, caption, result.diagnostics.gate)
     return Figure(svg=_svg_doc(width, height, "".join(parts)), kind="estimates", caption=caption)
 
 
@@ -432,10 +503,12 @@ def _ranks_svg(result: CausalRankResult) -> Figure:
         'stroke="#94a3b8"/>'
     )
     parts.append(_svg_text(left, height - 8, "rank (1 = best)", fill="#64748b", size=11))
+    caption = "Bar: conservative rank confidence set [1 + B_i, K - W_i]; dot: point rank."
+    height = _figure_footer(parts, width, height, caption, result.diagnostics.gate)
     return Figure(
         svg=_svg_doc(width, height, "".join(parts)),
         kind="ranks",
-        caption="Bar: conservative rank confidence set [1 + B_i, K - W_i]; dot: point rank.",
+        caption=caption,
     )
 
 
@@ -457,13 +530,25 @@ def _balance_svg(result: CausalRankResult, *, top_n: int = 16) -> Figure:
     weighted = shown["max_abs_smd_weighted"].to_numpy(dtype=float)
 
     width, left, right = 760, 190, 60
-    row_h, top, bottom = 26, 30, 34
+    row_h, top, bottom = 26, 30, 48
     height = top + bottom + row_h * n
     plot_w = width - left - right
-    xmax = max(float(np.nanmax(unweighted)), severe, thr) * 1.15 or 1.0
+    # Axis bound must reflect BOTH series: weighting can make imbalance worse
+    # (unweighted 0.15 -> weighted 0.8), and an unweighted-only bound would
+    # squash the weighted dots against the frame and hide the deterioration.
+    # Infinite |SMD| (zero within-arm variance, means differ) is off-scale by
+    # definition: it is drawn at the boundary and marked, never as nan.
+    finite = np.concatenate([unweighted[np.isfinite(unweighted)], weighted[np.isfinite(weighted)]])
+    finite_max = float(finite.max()) if finite.size else 0.0
+    xmax = max(finite_max, severe, thr) * 1.15 or 1.0
 
     def sx(v: float) -> float:
+        if not np.isfinite(v):
+            return left + plot_w  # infinite SMD: pin to the plot boundary
         return left + min(max(v, 0.0), xmax) / xmax * plot_w
+
+    def offscale(v: float) -> bool:
+        return bool(np.isinf(v))
 
     parts = [f'<rect x="0" y="0" width="{width}" height="{height}" fill="#ffffff"/>']
     for xv, color, name in ((thr, "#f59e0b", f"thr {thr:g}"),
@@ -487,6 +572,10 @@ def _balance_svg(result: CausalRankResult, *, top_n: int = 16) -> Figure:
             'stroke-width="2"/>'
         )
         parts.append(f'<circle cx="{xw:.1f}" cy="{y:.1f}" r="4.5" fill="#1d4ed8"/>')
+        # mark values that are infinite (off-scale) instead of silently clipping
+        for val, x, color in ((unweighted[i], xu, "#64748b"), (weighted[i], xw, "#1d4ed8")):
+            if offscale(float(val)):
+                parts.append(_svg_text(x - 6, y - 7, "∞", anchor="end", fill=color, size=12))
     axis_y = top + row_h * n + 6
     parts.append(
         f'<line x1="{left}" y1="{axis_y}" x2="{left + plot_w}" y2="{axis_y}" stroke="#94a3b8"/>'
@@ -496,16 +585,23 @@ def _balance_svg(result: CausalRankResult, *, top_n: int = 16) -> Figure:
         x = sx(float(xv))
         parts.append(_svg_text(x, axis_y + 15, f"{xv:.2f}", anchor="middle", fill="#64748b"))
     parts.append(
-        _svg_text(left, height - 6, "hollow = unweighted   filled = Hajek IPTW weighted",
-                  fill="#64748b", size=11)
+        _svg_text(
+            left,
+            height - 6,
+            "hollow = unweighted   filled = Hajek IPTW weighted   ∞ = infinite |SMD| (off-scale)",
+            fill="#64748b",
+            size=11,
+        )
     )
+    caption = (
+        "Per-term max |SMD| over treatment pairs, before/after weighting "
+        f"(top {n} terms by weighted |SMD|)."
+    )
+    height = _figure_footer(parts, width, height, caption, result.diagnostics.gate)
     return Figure(
         svg=_svg_doc(width, height, "".join(parts)),
         kind="balance",
-        caption=(
-            "Per-term max |SMD| over treatment pairs, before/after weighting "
-            f"(top {n} terms by weighted |SMD|)."
-        ),
+        caption=caption,
     )
 
 
@@ -557,10 +653,12 @@ def _ess_svg(result: CausalRankResult) -> Figure:
     parts.append(
         _svg_text(left, height - 6, "gray = raw n   blue = ESS", fill="#64748b", size=11)
     )
+    caption = "Effective sample size ESS_a = (sum w)^2 / sum(w^2) per arm."
+    height = _figure_footer(parts, width, height, caption, result.diagnostics.gate)
     return Figure(
         svg=_svg_doc(width, height, "".join(parts)),
         kind="ess",
-        caption="Effective sample size ESS_a = (sum w)^2 / sum(w^2) per arm.",
+        caption=caption,
     )
 
 
@@ -634,10 +732,12 @@ def _overlap_svg(result: CausalRankResult) -> Figure:
             size=11,
         )
     )
+    caption = "Propensity reach per arm over the target sample (positivity diagnostic)."
+    height = _figure_footer(parts, width, height, caption, result.diagnostics.gate)
     return Figure(
         svg=_svg_doc(width, height, "".join(parts)),
         kind="overlap",
-        caption="Propensity reach per arm over the target sample (positivity diagnostic).",
+        caption=caption,
     )
 
 
@@ -724,7 +824,7 @@ def _estimates_section(result: CausalRankResult) -> str:
         "<p>All arms are estimated on the <strong>same target population</strong>, "
         "so they are mutually comparable.</p>"
         f"{table}"
-        f'<div class="fig">{fig.svg}<div class="fig-caption">{_esc(fig.caption)}</div></div>'
+        f'<div class="fig">{fig.svg}</div>'
         f'<div class="formula">{_esc(result.metadata.get("estimator_formula", ""))}</div>'
     )
 
@@ -743,7 +843,7 @@ def _ranks_section(result: CausalRankResult) -> str:
     return (
         '<h2>2. Rank confidence sets</h2>'
         f"{table}"
-        f'<div class="fig">{fig.svg}<div class="fig-caption">{_esc(fig.caption)}</div></div>'
+        f'<div class="fig">{fig.svg}</div>'
         f'<div class="formula">{_esc(meta["formula"])}</div>'
         f"<p class=\"meta\">confidence_level = {meta['confidence_level']:.4f}, "
         f"higher_is_better = {meta['higher_is_better']}</p>"
@@ -788,27 +888,18 @@ def _diagnostics_section(result: CausalRankResult) -> str:
     parts.append("<h3>4.2 Weights &amp; effective sample size</h3>")
     parts.append(_df_to_html(diag.weights))
     ess_fig = _ess_svg(result)
-    parts.append(
-        f'<div class="fig">{ess_fig.svg}'
-        f'<div class="fig-caption">{_esc(ess_fig.caption)}</div></div>'
-    )
+    parts.append(f'<div class="fig">{ess_fig.svg}</div>')
     parts.append("<h3>4.3 Overlap / common support</h3>")
     parts.append(_df_to_html(diag.overlap))
     ov_fig = _overlap_svg(result)
-    parts.append(
-        f'<div class="fig">{ov_fig.svg}'
-        f'<div class="fig-caption">{_esc(ov_fig.caption)}</div></div>'
-    )
+    parts.append(f'<div class="fig">{ov_fig.svg}</div>')
     parts.append("<h3>4.4 Covariate balance (SMD)</h3>")
     if diag.balance_summary.empty:  # pragma: no cover - validation guarantees terms
         parts.append('<div class="note">No balance terms computed.</div>')
     else:
         parts.append(_df_to_html(diag.balance_summary))
         bal_fig = _balance_svg(result)
-        parts.append(
-            f'<div class="fig">{bal_fig.svg}'
-            f'<div class="fig-caption">{_esc(bal_fig.caption)}</div></div>'
-        )
+        parts.append(f'<div class="fig">{bal_fig.svg}</div>')
         parts.append("<details><summary>Full long-form SMD table (feature x level x pair)</summary>")
         parts.append(_df_to_html(diag.balance))
         parts.append("</details>")
