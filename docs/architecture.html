@@ -34,10 +34,7 @@
   }
   a { color: var(--blue); text-decoration: none; }
   a:hover { text-decoration: underline; }
-  a:focus-visible, summary:focus-visible {
-    outline: 2px solid var(--blue);
-    outline-offset: 2px;
-  }
+  a:focus-visible, summary:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
   code, .mono { font-family: var(--font-mono); font-size: .92em; }
 
   /* ---------- hero ---------- */
@@ -47,10 +44,7 @@
     display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 48px;
     align-items: center;
   }
-  .hero h1 {
-    font: 400 54px/1.08 var(--font-display);
-    margin: 0 0 14px; letter-spacing: -.01em;
-  }
+  .hero h1 { font: 400 54px/1.08 var(--font-display); margin: 0 0 14px; letter-spacing: -.01em; }
   .hero h1 .en { display: block; font-size: 30px; color: var(--ink-2); font-style: italic; margin-top: 8px; }
   .hero .lede { margin: 0 0 20px; max-width: 34em; color: var(--ink); font-size: 16.5px; }
   .hero .meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
@@ -60,7 +54,6 @@
   }
   .hero .meta li b { color: var(--ink); font-weight: 600; }
 
-  /* ---------- hero figure ---------- */
   .figure-card {
     background: var(--panel); border: 1px solid var(--hair); border-radius: 6px;
     padding: 18px 18px 12px;
@@ -75,8 +68,7 @@
   .fig-lab { font: 600 12.5px var(--font-mono); fill: var(--ink); }
   .fig-note { font: 11.5px var(--font-body); fill: var(--ink-2); }
   .ci-bar, .ci-cap, .ci-dot, .rk-bar, .rk-dot { transform-box: fill-box; }
-  .ci-bar, .ci-cap { transform-origin: left center; }
-  .rk-bar { transform-origin: left center; }
+  .ci-bar, .ci-cap, .rk-bar { transform-origin: left center; }
   .anim .ci-bar, .anim .ci-cap { animation: growX .55s cubic-bezier(.2,.75,.25,1) backwards; }
   .anim .ci-dot { animation: pop .3s ease-out backwards; }
   .anim .rk-bar { animation: growX .5s cubic-bezier(.2,.75,.25,1) backwards; }
@@ -92,12 +84,11 @@
     .anim .ci-bar, .anim .ci-cap, .anim .ci-dot, .anim .rk-bar, .anim .rk-dot { animation: none; }
   }
 
-  /* ---------- page layout ---------- */
+  /* ---------- layout ---------- */
   .page { max-width: 1180px; margin: 0 auto; padding: 0 32px 80px;
           display: grid; grid-template-columns: 186px minmax(0, 1fr); gap: 46px; }
   nav.toc { position: sticky; top: 0; align-self: start; padding-top: 44px; }
   nav.toc ol { list-style: none; margin: 0; padding: 0; border-left: 1px solid var(--hair); }
-  nav.toc li { margin: 0; }
   nav.toc a {
     display: block; padding: 5px 0 5px 14px; margin-left: -1px;
     border-left: 2px solid transparent;
@@ -109,126 +100,125 @@
 
   main { min-width: 0; }
   section { padding: 50px 0 8px; scroll-margin-top: 18px; }
-  h2 {
-    font: 400 29px/1.25 var(--font-display);
-    margin: 0 0 6px; display: flex; align-items: baseline; gap: 12px;
-  }
+  h2 { font: 400 29px/1.25 var(--font-display); margin: 0 0 6px;
+       display: flex; align-items: baseline; gap: 12px; }
   h2 .secno { font: 13px var(--font-mono); color: var(--blue); }
-  .sub { color: var(--ink-2); margin: 0 0 26px; max-width: 44em; }
-  h3 { font: 600 16px/1.4 var(--font-body); margin: 30px 0 10px; }
-  p { max-width: 46em; }
+  .sub { color: var(--ink-2); margin: 0 0 22px; max-width: 44em; font-size: 14.5px; }
+  h3 { font: 600 15px/1.4 var(--font-body); margin: 26px 0 10px; color: var(--ink); }
 
-  /* interval-bar rule: the page's structural motif */
-  .rule { display: flex; align-items: center; gap: 0; margin: 4px 0 0; color: var(--hair); }
+  .rule { display: flex; align-items: center; color: var(--hair); margin: 4px 0 0; }
   .rule i { width: 1px; height: 9px; background: currentColor; display: block; }
   .rule s { flex: 1; height: 1px; background: currentColor; display: block; text-decoration: none; }
   .rule b { width: 5px; height: 5px; border-radius: 50%; background: var(--blue); display: block; margin: 0 6px; }
 
-  /* ---------- pipeline ---------- */
-  .pipe { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 26px 22px; margin: 8px 0 18px; }
-  .stage {
-    background: var(--panel); border: 1px solid var(--hair); border-radius: 6px;
-    padding: 13px 14px 12px; position: relative;
-  }
-  .stage .no { font: 12px var(--font-mono); color: var(--blue); }
-  .stage .ttl { font-weight: 650; font-size: 14.5px; margin: 2px 0 3px; }
-  .stage .file { font: 11.5px var(--font-mono); color: var(--ink-2); word-break: break-all; }
-  .stage p { font-size: 13px; color: var(--ink-2); margin: 7px 0 0; max-width: none; line-height: 1.55; }
-  .stage .fx { font: 11.5px var(--font-mono); color: var(--ink); background: var(--paper);
-               border-radius: 3px; padding: 4px 7px; margin-top: 8px; display: inline-block; }
-  .stage::after {
-    content: ""; position: absolute; right: -18px; top: 50%; width: 12px; height: 1px;
-    background: var(--ink-3);
-  }
-  .stage:nth-child(4n)::after, .stage:last-child::after { display: none; }
-  .gate-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; margin-top: 4px; }
-  .gate-node {
-    background: var(--panel); border: 1px dashed var(--ink-3); border-radius: 6px; padding: 12px 14px;
-  }
-  .gate-node .ttl { font-weight: 650; font-size: 14px; }
-  .gate-node .file { font: 11.5px var(--font-mono); color: var(--ink-2); }
-  .gate-node p { font-size: 12.8px; color: var(--ink-2); margin: 6px 0 0; max-width: none; }
+  .scrollx { overflow-x: auto; }
+  .scrollx svg { display: block; min-width: 880px; width: 100%; height: auto; }
 
-  /* ---------- ledger table ---------- */
-  table.ledger { width: 100%; border-collapse: collapse; background: var(--panel);
-                 border: 1px solid var(--hair); border-radius: 6px; overflow: hidden; font-size: 13.6px; }
-  table.ledger th {
-    text-align: left; font: 600 12.5px var(--font-mono); color: var(--ink-2);
-    background: var(--paper); padding: 9px 14px; border-bottom: 1px solid var(--hair);
-  }
-  table.ledger td { padding: 10px 14px; border-bottom: 1px solid var(--hair); vertical-align: top; }
-  table.ledger tr:last-child td { border-bottom: 0; }
-  table.ledger td.layer { font-weight: 650; white-space: nowrap; }
-  table.ledger td.files { font-family: var(--font-mono); font-size: 12.3px; color: var(--ink); line-height: 1.7; }
-  table.ledger td.duty { color: var(--ink-2); }
+  /* diagram shared text classes (SVG) */
+  .d-num { font: 600 11px var(--font-mono); fill: var(--blue); }
+  .d-title { font: 650 13.5px var(--font-body); fill: var(--ink); }
+  .d-file { font: 10px var(--font-mono); fill: var(--ink-3); }
+  .d-fx { font: 10.5px var(--font-mono); fill: #35507a; }
+  .d-note { font: 11px var(--font-body); fill: var(--ink-2); }
+  .d-box { fill: #fff; stroke: var(--hair); }
+  .d-arrow { stroke: #8fa1b3; stroke-width: 1.6; fill: none; }
+  .d-arrow-r { stroke: #c98d87; stroke-width: 1.4; fill: none; stroke-dasharray: 5 4; }
+  .d-dash { stroke: #8fa1b3; stroke-width: 1.3; fill: none; stroke-dasharray: 4 4; }
 
-  /* ---------- formula panels ---------- */
-  .fx-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
-  .fx-panel { background: var(--panel); border: 1px solid var(--hair); border-left: 3px solid var(--blue);
-              border-radius: 0 6px 6px 0; padding: 14px 16px; }
-  .fx-panel h4 { margin: 0 0 8px; font-size: 14.5px; }
-  .fx-panel h4 span { font: 11.5px var(--font-mono); color: var(--ink-3); display: block; font-weight: 400; }
-  .fx-panel .formula {
-    font: 13px/1.9 var(--font-mono); background: var(--paper); border-radius: 4px;
-    padding: 9px 12px; overflow-x: auto; white-space: pre-wrap;
-  }
-  .fx-panel .note { font-size: 13px; color: var(--ink-2); margin: 9px 0 0; max-width: none; }
-  .fx-panel .edge { font-size: 12.6px; color: var(--critical); margin: 7px 0 0; max-width: none; }
+  /* ---------- §2 layer bands ---------- */
+  .layers { background: var(--panel); border: 1px solid var(--hair); border-radius: 6px; overflow: hidden; }
+  .layer-row { display: grid; grid-template-columns: 104px minmax(0,1fr); gap: 16px;
+               padding: 11px 16px; border-bottom: 1px solid var(--hair); align-items: start; }
+  .layer-row:last-child { border-bottom: 0; }
+  .lname { font: 650 13px/1.35 var(--font-body); color: var(--c, var(--ink));
+           border-left: 3px solid var(--c, var(--hair)); padding-left: 9px; }
+  .lmid { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .fchip { font: 11px/1 var(--font-mono); color: var(--ink-2); background: var(--paper);
+           border: 1px solid var(--hair); border-radius: 3px; padding: 4px 7px; }
+  .lduty { flex-basis: 100%; font-size: 12.3px; color: var(--ink-2); margin-top: 3px; }
 
-  /* ---------- gates & warnings ---------- */
-  .gate-ladder { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-bottom: 26px; }
-  .gate-state { border-radius: 6px; padding: 14px 16px; border: 1px solid; }
-  .gate-state .name { font: 600 15px var(--font-mono); }
-  .gate-state p { font-size: 13px; margin: 6px 0 0; max-width: none; }
+  /* ---------- §3 formula chain ---------- */
+  .chain-hint { font: 12.5px var(--font-mono); color: var(--ink-2); background: var(--panel);
+                border: 1px solid var(--hair); border-radius: 5px; padding: 8px 14px;
+                display: inline-block; margin-bottom: 14px; }
+  .chain-hint b { color: var(--blue); font-weight: 600; }
+  .fx-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  .fx-panel { background: var(--panel); border: 1px solid var(--hair);
+              border-left: 3px solid var(--blue); border-radius: 0 6px 6px 0; padding: 11px 13px; }
+  .fx-panel h4 { margin: 0 0 7px; font-size: 13.5px; }
+  .fx-panel .formula { font: 12px/1.75 var(--font-mono); background: var(--paper); border-radius: 4px;
+                       padding: 7px 10px; overflow-x: auto; white-space: pre-wrap; }
+  .fx-panel .mean { font-size: 12.4px; color: var(--ink-2); margin: 7px 0 0; }
+  .fx-panel .edge { font-size: 12px; color: var(--critical); margin: 5px 0 0;
+                    border-left: 2px solid var(--critical); padding-left: 8px; }
+
+  /* ---------- §4 gates ---------- */
+  .lbar { display: flex; height: 32px; border-radius: 5px; overflow: hidden;
+          border: 1px solid var(--hair); font: 600 11.5px/32px var(--font-mono); text-align: center; }
+  .lbar div { color: #fff; }
+  .lb-info { background: #64748b; } .lb-warn { background: #b8860b; } .lb-crit { background: #b3261e; }
+  .gate-ladder { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin: 16px 0 6px; }
+  .gate-state { border-radius: 6px; padding: 10px 14px; border: 1px solid; }
+  .gate-state .name { font: 600 14.5px var(--font-mono); }
+  .gate-state p { font-size: 12.5px; margin: 4px 0 0; max-width: none; }
   .gs-pass { background: #edf6f0; border-color: #b9d9c6; color: #1e5638; }
   .gs-caution { background: var(--caution-pale); border-color: #e6cf96; color: #6b4405; }
   .gs-critical { background: var(--critical-pale); border-color: #eab8b2; color: #7d1a14; }
-  table.codes { width: 100%; border-collapse: collapse; background: var(--panel);
-                border: 1px solid var(--hair); border-radius: 6px; overflow: hidden; font-size: 13.4px; }
-  table.codes th { text-align: left; font: 600 12.5px var(--font-mono); color: var(--ink-2);
-                   background: var(--paper); padding: 9px 14px; border-bottom: 1px solid var(--hair); }
-  table.codes td { padding: 8px 14px; border-bottom: 1px solid var(--hair); vertical-align: top; }
+
+  .wgroup { margin: 14px 0 0; }
+  .wgroup h4 { margin: 0 0 7px; font: 600 12px var(--font-mono); color: var(--ink-2); }
+  .wgroup h4 b { color: var(--ink-3); font-weight: 400; }
+  .wchips { display: flex; flex-wrap: wrap; gap: 7px; }
+  .wchip { display: inline-flex; align-items: center; font: 11.5px/1 var(--font-mono);
+           padding: 5px 9px; border-radius: 4px; border: 1px solid; border-left-width: 3px;
+           background: #fff; cursor: help; }
+  .wchip.info { border-color: #c3ced9; border-left-color: #64748b; color: #3d566e; }
+  .wchip.warning { border-color: #e6cf96; border-left-color: #b8860b; color: #6b4405; }
+  .wchip.critical { border-color: #eab8b2; border-left-color: #b3261e; color: #7d1a14; }
+  .legend { display: flex; gap: 16px; font-size: 12px; color: var(--ink-2); margin-top: 12px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+  details.codes { background: var(--panel); border: 1px solid var(--hair); border-radius: 6px; margin-top: 16px; }
+  details.codes summary { cursor: pointer; padding: 10px 15px; font-weight: 600; font-size: 13.5px; }
+  details.codes[open] summary { border-bottom: 1px solid var(--hair); }
+  table.codes { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.codes th { text-align: left; font: 600 12px var(--font-mono); color: var(--ink-2);
+                   background: var(--paper); padding: 8px 14px; border-bottom: 1px solid var(--hair); }
+  table.codes td { padding: 7px 14px; border-bottom: 1px solid var(--hair); vertical-align: top; }
   table.codes tr:last-child td { border-bottom: 0; }
-  table.codes td.code { font-family: var(--font-mono); font-size: 12.6px; white-space: nowrap; }
-  table.codes td.src { font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); white-space: nowrap; }
-  .chip { font: 600 11.5px/1 var(--font-mono); border-radius: 3px; padding: 4px 7px; white-space: nowrap; display: inline-block; }
+  table.codes td.code { font-family: var(--font-mono); font-size: 12.2px; white-space: nowrap; }
+  .chip { font: 600 11px/1 var(--font-mono); border-radius: 3px; padding: 4px 7px; white-space: nowrap; display: inline-block; }
   .chip.info { background: #eaeff4; color: #3d566e; }
   .chip.warning { background: var(--caution-pale); color: #6b4405; }
   .chip.critical { background: var(--critical-pale); color: #7d1a14; }
 
-  /* ---------- red lines ---------- */
-  .redlines { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 26px; margin: 0; padding: 0; list-style: none; }
-  .redlines li { border-left: 3px solid var(--critical); padding: 2px 0 2px 14px; }
-  .redlines b { display: block; font-size: 14.3px; }
-  .redlines span { font-size: 12.9px; color: var(--ink-2); }
+  /* ---------- §5 redlines ---------- */
+  .neq-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 18px; }
+  .neq { background: var(--panel); border: 1px solid var(--hair); border-radius: 6px;
+         padding: 11px 14px; border-top: 2px solid var(--critical); }
+  .neq .row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .neq .lhs { font-weight: 650; font-size: 14px; }
+  .neq .sign { font: 400 20px var(--font-display); color: var(--critical); }
+  .neq .rhs { font-weight: 650; font-size: 14px; color: var(--ink-2); }
+  .neq .cap { font-size: 12.2px; color: var(--ink-2); margin-top: 3px; }
 
-  /* ---------- timeline ---------- */
-  .timeline { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; margin: 10px 0 14px; }
-  .phase { background: var(--panel); border: 1px solid var(--hair); border-radius: 6px; padding: 12px 13px; position: relative; }
-  .phase::before { content: ""; position: absolute; top: -1px; left: 13px; right: 13px; height: 3px; background: var(--blue); border-radius: 2px; }
-  .phase .pn { font: 12px var(--font-mono); color: var(--blue); margin-top: 4px; }
-  .phase .pt { font-weight: 650; font-size: 13.8px; margin: 1px 0 4px; }
-  .phase p { font-size: 12.6px; color: var(--ink-2); margin: 0; max-width: none; }
-  .phase.now::before { background: var(--caution); }
-  .later { margin-top: 18px; background: var(--panel); border: 1px dashed var(--ink-3); border-radius: 6px; padding: 13px 16px; }
-  .later .lt { font-weight: 650; font-size: 13.8px; }
-  .later p { font-size: 13px; color: var(--ink-2); margin: 5px 0 0; max-width: none; }
-
-  /* ---------- numbers & calibration ---------- */
+  /* ---------- §7 numbers & mini charts ---------- */
   .numstrip { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); background: var(--panel);
               border: 1px solid var(--hair); border-radius: 6px; overflow: hidden; }
-  .numstrip div { padding: 15px 16px; border-right: 1px solid var(--hair); }
+  .numstrip div { padding: 14px 15px; border-right: 1px solid var(--hair); }
   .numstrip div:last-child { border-right: 0; }
-  .numstrip .n { font: 400 27px/1.1 var(--font-display); font-variant-numeric: tabular-nums; }
-  .numstrip .l { font-size: 12.3px; color: var(--ink-2); margin-top: 3px; line-height: 1.4; }
-  .cmds { font: 12.8px/2 var(--font-mono); color: var(--ink); background: var(--panel);
-          border: 1px solid var(--hair); border-radius: 6px; padding: 10px 16px; margin-top: 16px; overflow-x: auto; }
-  .cmds .c { color: var(--ink-3); }
+  .numstrip .n { font: 400 26px/1.1 var(--font-display); font-variant-numeric: tabular-nums; }
+  .numstrip .l { font-size: 12.2px; color: var(--ink-2); margin-top: 3px; line-height: 1.4; }
+  .charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
+  .mini { background: var(--panel); border: 1px solid var(--hair); border-radius: 6px; padding: 12px 14px 6px; }
+  .mini h4 { margin: 0 0 4px; font-size: 13px; }
+  .mini .cap { font-size: 11.8px; color: var(--ink-2); margin: 2px 0 6px; }
+  .mini svg { display: block; width: 100%; height: auto; }
 
-  details.calc { background: var(--panel); border: 1px solid var(--hair); border-radius: 6px; margin-top: 18px; }
-  details.calc summary { cursor: pointer; padding: 11px 16px; font-weight: 600; font-size: 13.8px; }
-  details.calc[open] summary { border-bottom: 1px solid var(--hair); }
-  details.calc .body { padding: 4px 16px 14px; }
+  .cmds { font: 12.8px/2 var(--font-mono); color: var(--ink); background: var(--panel);
+          border: 1px solid var(--hair); border-radius: 6px; padding: 10px 16px; margin-top: 18px; overflow-x: auto; }
+  .cmds .c { color: var(--ink-3); }
 
   footer { border-top: 1px solid var(--hair); background: var(--panel); margin-top: 60px; }
   footer .inner { max-width: 1180px; margin: 0 auto; padding: 26px 32px 34px;
@@ -238,10 +228,7 @@
     .hero-inner { grid-template-columns: 1fr; gap: 32px; }
     .page { grid-template-columns: 1fr; gap: 0; }
     nav.toc { display: none; }
-    .pipe { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .stage:nth-child(4n)::after { display: block; }
-    .stage:nth-child(2n)::after { display: none; }
-    .timeline { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .fx-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .numstrip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .numstrip div:nth-child(3n) { border-right: 0; }
   }
@@ -250,11 +237,11 @@
     .hero-inner { padding: 36px 20px 30px; }
     .page { padding: 0 20px 60px; }
     h2 { font-size: 24px; }
-    .pipe, .gate-row, .fx-grid, .redlines, .gate-ladder, .timeline { grid-template-columns: 1fr; }
-    .stage::after { display: none !important; }
+    .fx-grid, .gate-ladder, .neq-grid, .charts { grid-template-columns: 1fr; }
     .numstrip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .numstrip div:nth-child(n) { border-right: 1px solid var(--hair); border-bottom: 1px solid var(--hair); }
     .figure-card { overflow-x: auto; }
+    .layer-row { grid-template-columns: 1fr; gap: 6px; }
   }
 </style>
 </head>
@@ -264,19 +251,19 @@
   <div class="hero-inner">
     <div>
       <h1>因果排名<span class="en">CausalRank — architecture</span></h1>
-      <p class="lede">面向观测数据的多 Treatment 因果结局估计、联合不确定性量化与<strong>统计上可辩护</strong>的排名的端到端 Python 框架。本页依据源码与 <code>docs/</code> 整理，介绍 v0.4.0 的数据流、模块分工、统计内核、质量门控与工程验证。</p>
+      <p class="lede">面向观测数据的多 Treatment 因果结局估计、联合不确定性量化与<strong>统计上可辩护</strong>的排名的端到端 Python 框架。v0.4.0 · Phase 0–4 完成。</p>
       <ul class="meta">
         <li><b>v0.4.0</b> · Phase 0–4</li>
         <li>MIT</li>
         <li>Python ≥ 3.11</li>
         <li>PyPI <b>causalrank</b></li>
+        <li><b>185</b> tests</li>
         <li>零可视化依赖</li>
       </ul>
     </div>
 
     <figure class="figure-card">
       <svg viewBox="0 0 640 268" width="100%" role="img" aria-label="示意：四个 Treatment 的估计区间与排名置信集" class="anim">
-        <!-- top: forest plot -->
         <text class="fig-note" x="86" y="14">点估计 μ̂ 与同时区间</text>
         <line class="fig-grid" x1="90" y1="22" x2="90" y2="122"/><line class="fig-grid" x1="244" y1="22" x2="244" y2="122"/>
         <line class="fig-grid" x1="398" y1="22" x2="398" y2="122"/><line class="fig-grid" x1="552" y1="22" x2="552" y2="122"/>
@@ -285,32 +272,27 @@
         <text class="fig-tick" x="398" y="136" text-anchor="middle">0.50</text>
         <text class="fig-tick" x="552" y="136" text-anchor="middle">0.60</text>
         <line class="fig-axis" x1="90" y1="124" x2="600" y2="124"/>
-        <!-- A: .52 [.46,.58] -->
         <text class="fig-lab" x="78" y="40" text-anchor="end">A</text>
         <rect class="ci-bar d1" x="321" y="35" width="185" height="3" fill="#1d4ed8"/>
         <rect class="ci-cap d1" x="321" y="30" width="2.4" height="13" fill="#1d4ed8"/>
         <rect class="ci-cap d1" x="503" y="30" width="2.4" height="13" fill="#1d4ed8"/>
         <circle class="ci-dot d1" cx="413" cy="36.5" r="4.5" fill="#1d4ed8" stroke="#fff" stroke-width="1.4"/>
-        <!-- B: .44 [.38,.50] -->
         <text class="fig-lab" x="78" y="66" text-anchor="end">B</text>
         <rect class="ci-bar d2" x="213" y="61" width="185" height="3" fill="#1d4ed8"/>
         <rect class="ci-cap d2" x="213" y="56" width="2.4" height="13" fill="#1d4ed8"/>
         <rect class="ci-cap d2" x="395" y="56" width="2.4" height="13" fill="#1d4ed8"/>
         <circle class="ci-dot d2" cx="305" cy="62.5" r="4.5" fill="#1d4ed8" stroke="#fff" stroke-width="1.4"/>
-        <!-- C: .41 [.33,.49] -->
         <text class="fig-lab" x="78" y="92" text-anchor="end">C</text>
         <rect class="ci-bar d3" x="166" y="87" width="247" height="3" fill="#7d97c9"/>
         <rect class="ci-cap d3" x="166" y="82" width="2.4" height="13" fill="#7d97c9"/>
         <rect class="ci-cap d3" x="411" y="82" width="2.4" height="13" fill="#7d97c9"/>
         <circle class="ci-dot d3" cx="258" cy="88.5" r="4.5" fill="#7d97c9" stroke="#fff" stroke-width="1.4"/>
-        <!-- D: .38 [.30,.46] -->
         <text class="fig-lab" x="78" y="118" text-anchor="end">D</text>
         <rect class="ci-bar d4" x="119" y="113" width="247" height="3" fill="#7d97c9"/>
         <rect class="ci-cap d4" x="119" y="108" width="2.4" height="13" fill="#7d97c9"/>
         <rect class="ci-cap d4" x="366" y="108" width="2.4" height="13" fill="#7d97c9"/>
         <circle class="ci-dot d4" cx="212" cy="114.5" r="4.5" fill="#7d97c9" stroke="#fff" stroke-width="1.4"/>
 
-        <!-- bottom: rank confidence sets -->
         <text class="fig-note" x="86" y="160">保守排名置信集 [1+Bᵢ, K−Wᵢ]</text>
         <line class="fig-grid" x1="90" y1="168" x2="90" y2="252"/><line class="fig-grid" x1="263" y1="168" x2="263" y2="252"/>
         <line class="fig-grid" x1="437" y1="168" x2="437" y2="252"/><line class="fig-grid" x1="610" y1="168" x2="610" y2="252"/>
@@ -331,7 +313,7 @@
         <rect class="rk-bar r4" x="263" y="242" width="347" height="9" rx="4.5" fill="#d5dde6"/>
         <circle class="rk-dot r4" cx="610" cy="246.5" r="4.5" fill="#64748b"/>
       </svg>
-      <figcaption>示意（数值为示例，结构与 <code>result</code> 对象一致）：上排是同一目标总体上的 μ̂ 与 Bonferroni 同时区间，A 的区间整体高于 B，可确认 A 优于 B；C 与 D 分不出，排名置信集如实变宽。<strong>区间宽不是算法失败，而是诚实答案。</strong></figcaption>
+      <figcaption>示意（结构与 <code>result</code> 对象一致）：A 的区间整体高于 B → 可确认 A 优于 B；C 与 D 分不出 → 排名置信集如实变宽。<strong>区间宽不是算法失败，是诚实答案。</strong></figcaption>
     </figure>
   </div>
 </header>
@@ -352,201 +334,485 @@
 
   <main>
 
+    <!-- ================= §1 pipeline ================= -->
     <section id="pipeline">
       <h2><span class="secno">§1</span>端到端数据流</h2>
       <div class="rule"><i></i><s></s><b></b><s></s><i></i></div>
-      <p class="sub">一条主链从原始 DataFrame 走到排名置信集；三处旁路分别负责经验诊断、联合协方差与失败披露。每一步的预处理都只在训练折 / 重抽样内拟合，杜绝泄露。</p>
+      <p class="sub">主链 8 站；Bootstrap 对 ②③ 做 B 轮重拟合回环；④→⑤ 之间有成功率门控。</p>
 
-      <div class="pipe">
-        <div class="stage"><div class="no">01</div><div class="ttl">输入契约</div><div class="file">validation.py</div><p>schema、标签规范序、dtype 归一化、缺失与重复行检查；不合规立即拒绝而非静默删除。</p></div>
-        <div class="stage"><div class="no">02</div><div class="ttl">多分类倾向得分</div><div class="file">estimators/propensity.py</div><p>联合多分类 GBM（非 one-vs-rest），插补 / 独热编码包在 Pipeline 内；可选 5 折 OOF 交叉拟合。</p><span class="fx">e_a(x) = P(T=a | X=x)</span></div>
-        <div class="stage"><div class="no">03</div><div class="ttl">Hájek IPTW</div><div class="file">estimators/iptw.py</div><p>组内归一化加权均值，所有臂在同一目标总体上估计；HT 形式仅作内部数值核对。</p><span class="fx">wᵢ = 1/ê_{Tᵢ}(Xᵢ)</span></div>
-        <div class="stage"><div class="no">04</div><div class="ttl">联合 Bootstrap</div><div class="file">inference/bootstrap.py</div><p>每轮共享行重抽样并重拟合全部协议，B×K draws 求协方差；逐轮种子派生，与执行顺序和 n_jobs 无关。</p><span class="fx">Σ̂ = np.cov(draws, ddof=1)</span></div>
-        <div class="stage"><div class="no">05</div><div class="ttl">同时两两区间</div><div class="file">inference/pairwise.py</div><p>差值标准误带入联合协方差中的臂间相关性，Bonferroni 校正 M=K(K−1)/2 对。</p><span class="fx">d̂ᵢⱼ ± z₁₋α/(2M) · SE</span></div>
-        <div class="stage"><div class="no">06</div><div class="ttl">排名置信集</div><div class="file">inference/ranking.py</div><p>由可确认优劣关系构造保守区间；点估计并列共享名次并显式标记。</p><span class="fx">[1+Bᵢ, K−Wᵢ]</span></div>
-        <div class="stage"><div class="no">07</div><div class="ttl">结果对象</div><div class="file">results.py</div><p>估计表、协方差、两两表、排名表、结构化警告与元数据；数值 API 不依赖绘图库。</p></div>
-        <div class="stage"><div class="no">08</div><div class="ttl">静态报告</div><div class="file">visualization/report.py</div><p>自包含 HTML 与内联 SVG 图；渲染器只读结果对象，不重算任何统计量。</p><span class="fx">result.to_html(path)</span></div>
-      </div>
+      <div class="scrollx">
+      <svg viewBox="0 0 1120 452" role="img" aria-label="数据流：8 个主链节点、Bootstrap 重拟合回环、成功率门控、诊断与合成验证旁路">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#8fa1b3"/>
+          </marker>
+          <marker id="ahr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#c98d87"/>
+          </marker>
+          <marker id="ahb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#8fa1b3"/>
+          </marker>
+        </defs>
 
-      <div class="gate-row">
-        <div class="gate-node"><div class="ttl">质量诊断（旁路）</div><div class="file">diagnostics/</div><p>权重分布与 ESS、共同支持、加权前后 SMD，汇成 pass / caution / fail 门控。</p></div>
-        <div class="gate-node"><div class="ttl">推断阻断（旁路）</div><div class="file">bootstrap_min_success_rate = 0.9</div><p>成功率或成功轮数不过门槛时不给 Σ，附失败原因清单——宁可不推断，不给可疑协方差。</p></div>
-        <div class="gate-node"><div class="ttl">合成验证（旁路）</div><div class="file">simulation/</div><p>8 个已知真值的 DGP 场景与 Monte Carlo 基准，为每个统计结论提供覆盖率证据。</p></div>
+        <!-- bootstrap refit loop (above row 1) -->
+        <path class="d-dash" d="M 944,58 C 944,12 424,12 424,58" marker-end="url(#ahb)"/>
+        <text class="d-note" x="684" y="26" text-anchor="middle">每轮重抽样后重拟合 ② → ③（× B 轮）</text>
+
+        <!-- row 1 nodes: 1..4 left→right -->
+        <g>
+          <rect class="d-box" x="24" y="64" width="208" height="76" rx="6"/>
+          <text class="d-num" x="36" y="82">1</text>
+          <text class="d-title" x="52" y="82">输入契约</text>
+          <text class="d-file" x="36" y="102">validation.py</text>
+          <text class="d-fx" x="36" y="122">schema · 标签规范序 · dtype</text>
+
+          <rect class="d-box" x="296" y="64" width="208" height="76" rx="6"/>
+          <text class="d-num" x="308" y="82">2</text>
+          <text class="d-title" x="324" y="82">倾向得分</text>
+          <text class="d-file" x="308" y="102">propensity.py</text>
+          <text class="d-fx" x="308" y="122">e_a(x) = P(T=a | X)</text>
+
+          <rect class="d-box" x="568" y="64" width="208" height="76" rx="6"/>
+          <text class="d-num" x="580" y="82">3</text>
+          <text class="d-title" x="596" y="82">Hájek IPTW</text>
+          <text class="d-file" x="580" y="102">iptw.py</text>
+          <text class="d-fx" x="580" y="122">w=1/ê_T(X),  μ̂=ΣwY/Σw</text>
+
+          <rect class="d-box" x="840" y="64" width="208" height="76" rx="6"/>
+          <text class="d-num" x="852" y="82">4</text>
+          <text class="d-title" x="868" y="82">联合 Bootstrap</text>
+          <text class="d-file" x="852" y="102">bootstrap.py</text>
+          <text class="d-fx" x="852" y="122">Σ̂ = cov(draws, ddof=1)</text>
+
+          <line class="d-arrow" x1="236" y1="102" x2="288" y2="102" marker-end="url(#ah)"/>
+          <line class="d-arrow" x1="508" y1="102" x2="560" y2="102" marker-end="url(#ah)"/>
+          <line class="d-arrow" x1="780" y1="102" x2="832" y2="102" marker-end="url(#ah)"/>
+        </g>
+
+        <!-- gate diamond on 4→5 -->
+        <line class="d-arrow" x1="944" y1="142" x2="944" y2="172" marker-end="url(#ah)"/>
+        <polygon points="944,176 972,196 944,216 916,196" fill="#fff" stroke="#b3261e" stroke-width="1.6"/>
+        <text class="d-note" x="944" y="200" text-anchor="middle" fill="#b3261e" font-size="10">门控</text>
+        <text class="d-note" x="906" y="192" text-anchor="end">成功率 ≥90% 且 ≥30 轮?</text>
+        <path class="d-arrow-r" d="M 974,196 L 1032,196" marker-end="url(#ahr)"/>
+        <text class="d-note" x="1038" y="200" fill="#b3261e">阻断 Σ</text>
+        <line class="d-arrow" x1="944" y1="218" x2="944" y2="246" marker-end="url(#ah)"/>
+
+        <!-- row 2 nodes: 5..8 right→left -->
+        <g>
+          <rect class="d-box" x="840" y="250" width="208" height="76" rx="6"/>
+          <text class="d-num" x="852" y="268">5</text>
+          <text class="d-title" x="868" y="268">同时两两区间</text>
+          <text class="d-file" x="852" y="288">pairwise.py</text>
+          <text class="d-fx" x="852" y="308">d̂ ± z₁₋α/(2M)·SE</text>
+
+          <rect class="d-box" x="568" y="250" width="208" height="76" rx="6"/>
+          <text class="d-num" x="580" y="268">6</text>
+          <text class="d-title" x="596" y="268">排名置信集</text>
+          <text class="d-file" x="580" y="288">ranking.py</text>
+          <text class="d-fx" x="580" y="308">[1 + Bᵢ, K − Wᵢ]</text>
+
+          <rect class="d-box" x="296" y="250" width="208" height="76" rx="6"/>
+          <text class="d-num" x="308" y="268">7</text>
+          <text class="d-title" x="324" y="268">结果对象</text>
+          <text class="d-file" x="308" y="288">results.py</text>
+          <text class="d-fx" x="308" y="308">to_dict / to_json</text>
+
+          <rect class="d-box" x="24" y="250" width="208" height="76" rx="6"/>
+          <text class="d-num" x="36" y="268">8</text>
+          <text class="d-title" x="52" y="268">静态报告</text>
+          <text class="d-file" x="36" y="288">report.py</text>
+          <text class="d-fx" x="36" y="308">result.to_html(path)</text>
+
+          <line class="d-arrow" x1="834" y1="288" x2="784" y2="288" marker-end="url(#ah)"/>
+          <line class="d-arrow" x1="562" y1="288" x2="512" y2="288" marker-end="url(#ah)"/>
+          <line class="d-arrow" x1="290" y1="288" x2="240" y2="288" marker-end="url(#ah)"/>
+        </g>
+
+        <!-- diagnostics bypass (middle band) -->
+        <line class="d-dash" x1="400" y1="142" x2="400" y2="158" marker-end="url(#ah)"/>
+        <path class="d-dash" d="M 672,142 V 186 H 596" marker-end="url(#ah)"/>
+        <rect x="150" y="158" width="440" height="96" rx="8" fill="#f8fafc" stroke="#8fa1b3" stroke-dasharray="5 4"/>
+        <text class="d-title" x="168" y="182">质量诊断（旁路）</text>
+        <text class="d-file" x="168" y="200">diagnostics/  weights · overlap · balance</text>
+        <text class="d-note" x="168" y="220">权重分位 · ESS · 全样本共同支持 · 加权前后 SMD</text>
+        <g font-family="var(--font-mono)" font-size="9.5" font-weight="600" text-anchor="middle">
+          <rect x="168" y="230" width="52" height="16" rx="3" fill="#edf6f0" stroke="#b9d9c6"/>
+          <text x="194" y="241" fill="#1e5638">pass</text>
+          <rect x="228" y="230" width="64" height="16" rx="3" fill="#faf2de" stroke="#e6cf96"/>
+          <text x="260" y="241" fill="#6b4405">caution</text>
+          <rect x="300" y="230" width="46" height="16" rx="3" fill="#fbeae7" stroke="#eab8b2"/>
+          <text x="323" y="241" fill="#7d1a14">fail</text>
+        </g>
+
+        <!-- simulation strip -->
+        <rect x="24" y="368" width="1024" height="56" rx="8" fill="#f8fafc" stroke="#8fa1b3" stroke-dasharray="6 4"/>
+        <text class="d-title" x="536" y="392" text-anchor="middle">合成验证（旁路）· simulation/</text>
+        <text class="d-note" x="536" y="410" text-anchor="middle">8 个已知真值场景 + Monte Carlo 基准 — 覆盖率 · se_ratio · 假确认率，对照全链路输出</text>
+        <line class="d-dash" x1="536" y1="368" x2="536" y2="334" marker-end="url(#ah)"/>
+      </svg>
       </div>
     </section>
 
+    <!-- ================= §2 modules ================= -->
     <section id="modules">
       <h2><span class="secno">§2</span>模块地图</h2>
       <div class="rule"><i></i><s></s><b></b><s></s><i></i></div>
-      <p class="sub">src layout，23 个源文件按职责分层；上层只编排，统计量都在下层纯函数中实现，因此每个公式都能被独立手算验证。</p>
-      <table class="ledger">
-        <thead><tr><th>层</th><th>文件</th><th>职责</th></tr></thead>
-        <tbody>
-          <tr><td class="layer">编排与契约</td><td class="files">api.py · config.py<br>results.py · validation.py<br>exceptions.py</td><td class="duty"><code>CausalRank.fit()</code> 全流程编排；全部门控阈值与选项集中于一个配置对象；结果容器与结构化警告（code / level / message / details）；输入契约校验；异常分 ValidationError 与 Error 两级。</td></tr>
-          <tr><td class="layer">估计</td><td class="files">estimators/propensity.py<br>estimators/iptw.py</td><td class="duty">多分类 GBM 倾向得分：Pipeline 内插补 / 独热编码、<code>classes_</code> 到公开标签的显式列对齐、分层 K 折 OOF；Hájek IPTW 点估计与 ESS 记账；HT 仅内部核对。</td></tr>
-          <tr><td class="layer">诊断</td><td class="files">diagnostics/weights.py<br>diagnostics/overlap.py<br>diagnostics/balance.py</td><td class="duty">权重分位数与极端权重占比；<em>全目标样本</em>视角的共同支持（不只看被处理行）；数值 / 类别 / 缺失指示项的加权与未加权 SMD（分母用未加权 pooled SD，Austin 2009）。</td></tr>
-          <tr><td class="layer">推断</td><td class="files">inference/bootstrap.py<br>inference/pairwise.py<br>inference/ranking.py</td><td class="duty">联合重拟合 Bootstrap 协方差与失败披露；Bonferroni 同时区间与方向判定；保守排名置信集与并列约定；低层入口 <code>rank_from_estimates()</code> 可脱离本包流程单独验证。</td></tr>
-          <tr><td class="layer">模拟</td><td class="files">simulation/dgp.py<br>simulation/benchmark.py</td><td class="duty">8 场景可配置 DGP，真值 μ_true 由独立种子的 20 万条 MC 参考样本估计并记录 MC 标准误；Bias/RMSE、SE 校准、并列感知排名覆盖率三套基准。</td></tr>
-          <tr><td class="layer">呈现</td><td class="files">visualization/report.py</td><td class="duty">静态 HTML 报告与 5 种内联 SVG 图（estimates / ranks / balance / ess / overlap）；确定性输出、标签转义、零脚本零外部资源。</td></tr>
-          <tr><td class="layer">工程</td><td class="files">tests/ · examples/<br>scripts/ · .github/</td><td class="duty">14 个测试文件 173 项测试；4 个可执行示例 Notebook；研究基准脚本；GitHub Actions 在 3.11 / 3.12 矩阵上跑 lint、类型、测试、打包与 Notebook 执行。</td></tr>
-        </tbody>
-      </table>
+      <p class="sub">23 个源文件，7 层。上层只编排，统计量都在下层纯函数里——每个公式可被独立手算验证。</p>
+
+      <div class="layers">
+        <div class="layer-row" style="--c:#64748b">
+          <div class="lname">编排与契约</div>
+          <div class="lmid">
+            <span class="fchip">api.py</span><span class="fchip">config.py</span><span class="fchip">results.py</span><span class="fchip">validation.py</span><span class="fchip">exceptions.py</span>
+            <span class="lduty">fit() 编排 · 阈值配置 · 结果容器 · 结构化警告 · 输入契约</span>
+          </div>
+        </div>
+        <div class="layer-row" style="--c:#1d4ed8">
+          <div class="lname">估计</div>
+          <div class="lmid">
+            <span class="fchip">estimators/propensity.py</span><span class="fchip">estimators/iptw.py</span>
+            <span class="lduty">多分类 GBM 倾向 · Pipeline 内预处理 · classes_ 对齐 · OOF · Hájek · ESS</span>
+          </div>
+        </div>
+        <div class="layer-row" style="--c:#a56808">
+          <div class="lname">诊断</div>
+          <div class="lmid">
+            <span class="fchip">diagnostics/weights.py</span><span class="fchip">overlap.py</span><span class="fchip">balance.py</span>
+            <span class="lduty">权重分位 · 全样本共同支持 · 加权前后 SMD → 汇成质量门控</span>
+          </div>
+        </div>
+        <div class="layer-row" style="--c:#3730a3">
+          <div class="lname">推断</div>
+          <div class="lmid">
+            <span class="fchip">inference/bootstrap.py</span><span class="fchip">pairwise.py</span><span class="fchip">ranking.py</span>
+            <span class="lduty">重拟合 Bootstrap 协方差 · Bonferroni 同时区间 · 排名置信集 · 低层入口 rank_from_estimates()</span>
+          </div>
+        </div>
+        <div class="layer-row" style="--c:#0f766e">
+          <div class="lname">模拟</div>
+          <div class="lmid">
+            <span class="fchip">simulation/dgp.py</span><span class="fchip">benchmark.py</span>
+            <span class="lduty">8 场景 DGP · 独立 MC 真值（20 万参考样本）· Bias/RMSE · SE 校准 · 排名覆盖率</span>
+          </div>
+        </div>
+        <div class="layer-row" style="--c:#7c3aed">
+          <div class="lname">呈现</div>
+          <div class="lmid">
+            <span class="fchip">visualization/report.py</span>
+            <span class="lduty">静态 HTML 报告 · 5 种内联 SVG 图 · 确定性输出 · 零脚本零外部资源</span>
+          </div>
+        </div>
+        <div class="layer-row" style="--c:#57697a">
+          <div class="lname">工程</div>
+          <div class="lmid">
+            <span class="fchip">tests/</span><span class="fchip">examples/</span><span class="fchip">scripts/</span><span class="fchip">.github/</span>
+            <span class="lduty">13 个测试文件 185 项测试 · 4 个可执行 Notebook · 研究脚本 · CI 3.11 / 3.12 矩阵</span>
+          </div>
+        </div>
+      </div>
     </section>
 
+    <!-- ================= §3 kernel ================= -->
     <section id="kernel">
       <h2><span class="secno">§3</span>统计内核</h2>
       <div class="rule"><i></i><s></s><b></b><s></s><i></i></div>
-      <p class="sub">六个公式构成全部推断链。每个面板给出公式、含义与数值边界；红线以红字紧随公式，因为它们必须和统计量一起被读到。</p>
+      <p class="sub">六个公式构成全部推断链；红线紧贴公式，因为它们必须被一起读到。</p>
+
+      <div class="chain-hint">e_a(x) &nbsp;→&nbsp; <b>wᵢ</b> &nbsp;→&nbsp; <b>μ̂ₐ</b> &nbsp;→&nbsp; <b>Σ̂</b> &nbsp;→&nbsp; <b>d̂ᵢⱼ</b> &nbsp;→&nbsp; <b>[Lᵢ, Uᵢ]</b></div>
 
       <div class="fx-grid">
         <div class="fx-panel">
-          <h4>倾向得分<span>预测模型，不是因果方法</span></h4>
-          <div class="formula">e_a(x) = P(T = a | X = x),&nbsp;&nbsp; Σₐ e_a(x) = 1</div>
-          <p class="note">联合多分类 GBM；<code>cross_fit=m</code> 产生 out-of-fold 概率，消除"同一份数据既拟合又评估"的过拟合权重；默认超参在已知真值倾向面上调定。</p>
-          <p class="edge">裁剪默认关闭；显式配置时只做下界且报告比例；e=0 属 positivity 违背，直接报错。</p>
+          <h4>① 倾向得分</h4>
+          <div class="formula">e_a(x) = P(T=a | X=x),   Σₐ e_a(x) = 1</div>
+          <p class="mean">联合多分类 GBM；cross_fit → OOF 概率</p>
+          <p class="edge">e=0 直接报错；裁剪默认关闭</p>
         </div>
         <div class="fx-panel">
-          <h4>Hájek IPTW<span>主估计器 · 同一目标总体</span></h4>
-          <div class="formula">wᵢ = 1 / ê_{Tᵢ}(Xᵢ)<br>μ̂ₐ = Σ 1{Tᵢ=a} wᵢYᵢ / Σ 1{Tᵢ=a} wᵢ</div>
-          <p class="note">二元结局下必落在 [0,1]；组内权重同乘常数估计不变。原始组均值比较的是不同人群，这里的每个 μ̂ 都在同一目标总体上，排名才可比。</p>
-          <p class="edge">禁止"组内归一化权重再除以 n"的混合算法——HT 与 Hájek 两个函数独立实现、独立手算测试。</p>
+          <h4>② Hájek IPTW</h4>
+          <div class="formula">wᵢ = 1/ê_{Tᵢ}(Xᵢ)
+μ̂ₐ = Σ1{Tᵢ=a}wᵢYᵢ / Σ1{Tᵢ=a}wᵢ</div>
+          <p class="mean">所有臂在同一目标总体——排名才可比</p>
+          <p class="edge">禁止 HT / Hájek 混合算法</p>
         </div>
         <div class="fx-panel">
-          <h4>有效样本量<span>权重把信息集中到多少条观测</span></h4>
-          <div class="formula">ESSₐ = (Σᵢ wᵢₐ)² / Σᵢ wᵢₐ²,&nbsp;&nbsp; wᵢₐ = 1{Tᵢ=a} wᵢ</div>
-          <p class="note">ESS 崩塌意味着少数极端权重主宰该臂的估计；ESS 与 ESS 比是门控降级的直接触发量之一。</p>
+          <h4>③ 有效样本量</h4>
+          <div class="formula">ESSₐ = (Σᵢ wᵢₐ)² / Σᵢ wᵢₐ²</div>
+          <p class="mean">少数极端权重主宰估计 → 门控降级</p>
+          <p class="edge">低 ESS 触发 warning</p>
         </div>
         <div class="fx-panel">
-          <h4>联合 Bootstrap 协方差<span>每轮重拟合全部协议</span></h4>
+          <h4>④ 联合 Bootstrap 协方差</h4>
           <div class="formula">Σ̂ = np.cov(draws, rowvar=False, ddof=1)</div>
-          <p class="note">同一行索引向量服务全部 Treatment，臂间相关性因此被带入每个差值标准误；逐轮种子由 <code>SeedSequence(base).spawn(B)</code> 派生，同种子逐位可复现。</p>
-          <p class="edge">每行已是完整估计量，绝不再除以 n；非 PSD 明确报错，不做数值修补。</p>
+          <p class="mean">共享行重抽样：臂间相关进入差值 SE</p>
+          <p class="edge">绝不再除以 n；非 PSD → 报错</p>
         </div>
         <div class="fx-panel">
-          <h4>Bonferroni 同时区间<span>可确认的优劣关系</span></h4>
-          <div class="formula">d̂ᵢⱼ ± z₁₋α/(2M) · √(Σ̂ᵢᵢ + Σ̂ⱼⱼ − 2Σ̂ᵢⱼ),&nbsp;&nbsp; M = K(K−1)/2</div>
-          <p class="note">仅当区间整体位于 0 的一侧才确认方向；K=2 时退化为常规两方案比较（已测）。</p>
-          <p class="edge">单项 CI 重叠不能代替显著性检验；inconclusive 不是相等的证据。</p>
+          <h4>⑤ Bonferroni 同时区间</h4>
+          <div class="formula">d̂ᵢⱼ ± z₁₋α/(2M)·√(Σᵢᵢ+Σⱼⱼ−2Σᵢⱼ)
+M = K(K−1)/2</div>
+          <p class="mean">区间不跨 0 才确认方向；K=2 退化</p>
+          <p class="edge">单项 CI 重叠 ≠ 显著性检验</p>
         </div>
         <div class="fx-panel">
-          <h4>保守排名置信集<span>同时覆盖意义下的名次区间</span></h4>
-          <div class="formula">[Lᵢ, Uᵢ] = [1 + Bᵢ,&nbsp; K − Wᵢ]</div>
-          <p class="note">Bᵢ / Wᵢ 为可确认优于 / 劣于臂 i 的臂数；点估计并列共享名次并以 <code>point_tie</code> 标记，绝不按标签字母序打破。</p>
-          <p class="edge">Bootstrap 中点排名第一的频次不是最优概率；真实效果并列时区间变宽是正确输出。</p>
+          <h4>⑥ 保守排名置信集</h4>
+          <div class="formula">[Lᵢ, Uᵢ] = [1 + Bᵢ,  K − Wᵢ]</div>
+          <p class="mean">并列共享名次并标记 point_tie</p>
+          <p class="edge">点第一的频次 ≠ 最优概率</p>
         </div>
       </div>
     </section>
 
+    <!-- ================= §4 gates ================= -->
     <section id="gates">
       <h2><span class="secno">§4</span>质量门控</h2>
       <div class="rule"><i></i><s></s><b></b><s></s><i></i></div>
-      <p class="sub">17 个结构化警告码按最高级别汇成一个门控。警告是机器可读对象，不是打印字符串——门控可以被测试断言。</p>
+      <p class="sub">17 个结构化警告码按最高级别汇成一个门控。悬停芯片看触发条件。</p>
 
-      <div class="gate-ladder">
-        <div class="gate-state gs-pass"><div class="name">pass</div><p>无 warning / critical 级发现。只是本样本的经验陈述，<b>不</b>验证任何识别假设。</p></div>
-        <div class="gate-state gs-caution"><div class="name">caution</div><p>至少一条警告。先读警告，再解释任何调整均值或排名。</p></div>
-        <div class="gate-state gs-critical"><div class="name">fail</div><p>存在 critical 发现。估计仍返回以保透明，但不得包装成可靠因果排名。</p></div>
+      <div class="lbar" role="img" aria-label="警告级别构成：info 2 个，warning 12 个，critical 3 个">
+        <div class="lb-info" style="width:11.8%">info × 2</div>
+        <div class="lb-warn" style="width:70.6%">warning × 12</div>
+        <div class="lb-crit" style="width:17.6%">critical × 3</div>
       </div>
 
-      <table class="codes">
-        <thead><tr><th>警告码</th><th>级别</th><th>来源</th><th>触发条件</th></tr></thead>
-        <tbody>
-          <tr><td class="code">label_dtype_cast</td><td><span class="chip info">info</span></td><td class="src">validation</td><td>标签被安全转换类型（int/str/bool/float 整数值）</td></tr>
-          <tr><td class="code">missing_covariates</td><td><span class="chip info">info</span></td><td class="src">validation</td><td>协变量存在缺失，将在训练折内插补</td></tr>
-          <tr><td class="code">high_cardinality_categorical</td><td><span class="chip warning">warning</span></td><td class="src">validation</td><td>类别基数超过 <code>max_category_cardinality</code>（默认 25）</td></tr>
-          <tr><td class="code">small_group</td><td><span class="chip warning">warning</span></td><td class="src">validation</td><td>某臂样本数低于 <code>min_group_n</code>（默认 30）</td></tr>
-          <tr><td class="code">rare_treatment</td><td><span class="chip warning">warning</span></td><td class="src">validation</td><td>稀有臂，交叉拟合折与 Bootstrap 重抽样风险高</td></tr>
-          <tr><td class="code">duplicate_rows</td><td><span class="chip warning">warning</span></td><td class="src">validation</td><td>完全重复行——iid 抽样假设存疑，聚类结构需 cluster bootstrap</td></tr>
-          <tr><td class="code">low_ess</td><td><span class="chip warning">warning</span></td><td class="src">weights</td><td>ESS &lt; <code>min_ess</code>（30）或 ESS 比 &lt; 0.2</td></tr>
-          <tr><td class="code">extreme_weight</td><td><span class="chip warning">warning</span></td><td class="src">weights</td><td>单条权重占该臂总权重 &gt; 10%</td></tr>
-          <tr><td class="code">propensity_clipped</td><td><span class="chip warning">warning</span></td><td class="src">weights</td><td>显式裁剪实际发生——必须与任何结果一起披露</td></tr>
-          <tr><td class="code">no_common_support</td><td><span class="chip critical">critical</span></td><td class="src">overlap</td><td>部分目标样本上 e_a(X)=0：该臂均值在那里不可识别</td></tr>
-          <tr><td class="code">weak_common_support</td><td><span class="chip warning">warning</span></td><td class="src">overlap</td><td>目标样本低概率占比 &gt; 5%——population_mean 依赖外推</td></tr>
-          <tr><td class="code">low_propensity</td><td><span class="chip warning">warning</span></td><td class="src">overlap</td><td>实际处理倾向 &lt; 0.01，或近确定性分配占比过高</td></tr>
-          <tr><td class="code">degenerate_smd</td><td><span class="chip warning">warning</span></td><td class="src">balance</td><td>组内方差为零，SMD 按约定取 0 或 ∞</td></tr>
-          <tr><td class="code">residual_imbalance</td><td><span class="chip warning">warning</span></td><td class="src">balance</td><td>加权后 max|SMD| &gt; 0.1——筛查惯例，不是无偏保证</td></tr>
-          <tr><td class="code">severe_imbalance</td><td><span class="chip critical">critical</span></td><td class="src">balance</td><td>加权后 max|SMD| &gt; 0.25——调整均值可能仍被混杂</td></tr>
-          <tr><td class="code">bootstrap_failures</td><td><span class="chip warning">warning</span></td><td class="src">bootstrap</td><td>存在失败轮（低于门槛时升为 critical），逐轮记录原因</td></tr>
-          <tr><td class="code">bootstrap_inference_blocked</td><td><span class="chip critical">critical</span></td><td class="src">bootstrap</td><td>成功率 &lt; 90% 或成功轮 &lt; 30：推断阻断，不返回 Σ</td></tr>
-        </tbody>
-      </table>
+      <div class="gate-ladder">
+        <div class="gate-state gs-pass"><div class="name">pass</div><p>无警告。仅本样本的经验陈述，不验证识别假设。</p></div>
+        <div class="gate-state gs-caution"><div class="name">caution</div><p>有警告。先读警告，再解释任何均值或排名。</p></div>
+        <div class="gate-state gs-critical"><div class="name">fail</div><p>有 critical。估计仍返回，但不得包装成可靠排名。</p></div>
+      </div>
+
+      <div class="wgroup">
+        <h4>validation <b>× 6</b></h4>
+        <div class="wchips">
+          <span class="wchip info" title="标签被安全转换类型（int/str/bool/float 整数值）">label_dtype_cast</span>
+          <span class="wchip info" title="协变量存在缺失，将在训练折内插补">missing_covariates</span>
+          <span class="wchip warning" title="类别基数超过 max_category_cardinality（默认 25）">high_cardinality_categorical</span>
+          <span class="wchip warning" title="某臂样本数低于 min_group_n（默认 30）">small_group</span>
+          <span class="wchip warning" title="稀有臂，交叉拟合折与 Bootstrap 重抽样风险高">rare_treatment</span>
+          <span class="wchip warning" title="完全重复行——iid 抽样假设存疑，聚类结构需 cluster bootstrap">duplicate_rows</span>
+        </div>
+      </div>
+      <div class="wgroup">
+        <h4>weights <b>× 3</b></h4>
+        <div class="wchips">
+          <span class="wchip warning" title="ESS &lt; min_ess（30）或 ESS 比 &lt; 0.2">low_ess</span>
+          <span class="wchip warning" title="单条权重占该臂总权重 &gt; 10%">extreme_weight</span>
+          <span class="wchip warning" title="显式裁剪实际发生——必须与任何结果一起披露">propensity_clipped</span>
+        </div>
+      </div>
+      <div class="wgroup">
+        <h4>overlap <b>× 3</b></h4>
+        <div class="wchips">
+          <span class="wchip critical" title="部分目标样本上 e_a(X)=0：该臂均值在那里不可识别">no_common_support</span>
+          <span class="wchip warning" title="目标样本低概率占比 &gt; 5%——population_mean 依赖外推">weak_common_support</span>
+          <span class="wchip warning" title="实际处理倾向 &lt; 0.01，或近确定性分配占比过高">low_propensity</span>
+        </div>
+      </div>
+      <div class="wgroup">
+        <h4>balance <b>× 3</b></h4>
+        <div class="wchips">
+          <span class="wchip warning" title="组内方差为零 → SMD = ±∞（图中钉在边界并标注 ∞）">degenerate_smd</span>
+          <span class="wchip warning" title="加权后 max|SMD| &gt; 0.1——筛查惯例，不是无偏保证">residual_imbalance</span>
+          <span class="wchip critical" title="加权后 max|SMD| &gt; 0.25——调整均值可能仍被混杂">severe_imbalance</span>
+        </div>
+      </div>
+      <div class="wgroup">
+        <h4>bootstrap <b>× 2</b></h4>
+        <div class="wchips">
+          <span class="wchip warning" title="存在失败轮（低于门槛时升为 critical），逐轮记录原因">bootstrap_failures</span>
+          <span class="wchip critical" title="成功率 &lt; 90% 或成功轮 &lt; 30：推断阻断，不返回 Σ">bootstrap_inference_blocked</span>
+        </div>
+      </div>
+
+      <div class="legend">
+        <span><i style="background:#64748b"></i>info</span>
+        <span><i style="background:#b8860b"></i>warning</span>
+        <span><i style="background:#b3261e"></i>critical</span>
+        <span style="color:var(--ink-3)">悬停任意芯片查看触发条件与默认阈值</span>
+      </div>
+
+      <details class="codes">
+        <summary>全部警告码明细表</summary>
+        <table class="codes">
+          <thead><tr><th>警告码</th><th>级别</th><th>来源</th><th>触发条件</th></tr></thead>
+          <tbody>
+            <tr><td class="code">label_dtype_cast</td><td><span class="chip info">info</span></td><td>validation</td><td>标签被安全转换类型（int/str/bool/float 整数值）</td></tr>
+            <tr><td class="code">missing_covariates</td><td><span class="chip info">info</span></td><td>validation</td><td>协变量存在缺失，将在训练折内插补</td></tr>
+            <tr><td class="code">high_cardinality_categorical</td><td><span class="chip warning">warning</span></td><td>validation</td><td>类别基数超过 <code>max_category_cardinality</code>（默认 25）</td></tr>
+            <tr><td class="code">small_group</td><td><span class="chip warning">warning</span></td><td>validation</td><td>某臂样本数低于 <code>min_group_n</code>（默认 30）</td></tr>
+            <tr><td class="code">rare_treatment</td><td><span class="chip warning">warning</span></td><td>validation</td><td>稀有臂，交叉拟合折与 Bootstrap 重抽样风险高</td></tr>
+            <tr><td class="code">duplicate_rows</td><td><span class="chip warning">warning</span></td><td>validation</td><td>完全重复行——iid 抽样假设存疑，聚类结构需 cluster bootstrap</td></tr>
+            <tr><td class="code">low_ess</td><td><span class="chip warning">warning</span></td><td>weights</td><td>ESS &lt; <code>min_ess</code>（30）或 ESS 比 &lt; 0.2</td></tr>
+            <tr><td class="code">extreme_weight</td><td><span class="chip warning">warning</span></td><td>weights</td><td>单条权重占该臂总权重 &gt; 10%</td></tr>
+            <tr><td class="code">propensity_clipped</td><td><span class="chip warning">warning</span></td><td>weights</td><td>显式裁剪实际发生——必须与任何结果一起披露</td></tr>
+            <tr><td class="code">no_common_support</td><td><span class="chip critical">critical</span></td><td>overlap</td><td>部分目标样本上 e_a(X)=0：该臂均值在那里不可识别</td></tr>
+            <tr><td class="code">weak_common_support</td><td><span class="chip warning">warning</span></td><td>overlap</td><td>目标样本低概率占比 &gt; 5%——population_mean 依赖外推</td></tr>
+            <tr><td class="code">low_propensity</td><td><span class="chip warning">warning</span></td><td>overlap</td><td>实际处理倾向 &lt; 0.01，或近确定性分配占比过高</td></tr>
+            <tr><td class="code">degenerate_smd</td><td><span class="chip warning">warning</span></td><td>balance</td><td>组内方差为零 → SMD = ±∞（图中钉在边界并标注 ∞）</td></tr>
+            <tr><td class="code">residual_imbalance</td><td><span class="chip warning">warning</span></td><td>balance</td><td>加权后 max|SMD| &gt; 0.1——筛查惯例，不是无偏保证</td></tr>
+            <tr><td class="code">severe_imbalance</td><td><span class="chip critical">critical</span></td><td>balance</td><td>加权后 max|SMD| &gt; 0.25——调整均值可能仍被混杂</td></tr>
+            <tr><td class="code">bootstrap_failures</td><td><span class="chip warning">warning</span></td><td>bootstrap</td><td>存在失败轮（低于门槛时升为 critical），逐轮记录原因</td></tr>
+            <tr><td class="code">bootstrap_inference_blocked</td><td><span class="chip critical">critical</span></td><td>bootstrap</td><td>成功率 &lt; 90% 或成功轮 &lt; 30：推断阻断，不返回 Σ</td></tr>
+          </tbody>
+        </table>
+      </details>
     </section>
 
+    <!-- ================= §5 redlines ================= -->
     <section id="redlines">
       <h2><span class="secno">§5</span>诚实红线</h2>
       <div class="rule"><i></i><s></s><b></b><s></s><i></i></div>
-      <p class="sub">这个项目一半的性格在"拒绝做什么"。以下八条写在代码、文档、报告与测试里，任何输出形态都不得越过。</p>
-      <ul class="redlines">
-        <li><b>点估计排序 ≠ 统计上确立的排名</b><span>排名结论只能来自同时区间的覆盖性质，不能来自 μ̂ 的大小顺序。</span></li>
-        <li><b>inconclusive ≠ 相等的证据</b><span>决策词表里没有 equal/tie；"差异不显著"与"效果相等"是两个命题。</span></li>
-        <li><b>点排名第一的频次 ≠ 最优概率</b><span>Bootstrap 里某臂排第一的次数不携带概率语义，报告与文档都不这样呈现。</span></li>
-        <li><b>单项 CI 重叠 ≠ 显著性检验</b><span>两两结论只能由 Bonferroni 同时区间给出。</span></li>
-        <li><b>AUC / 准确率 ≠ 因果有效性证据</b><span>相关屏幕是平衡、重叠与稳定性；模型拟合指标从不作为质量判据输出。</span></li>
-        <li><b>并列绝不按标签字母序打破</b><span>点估计并列共享名次并显式标记，真并列时区间变宽而非强选赢家。</span></li>
-        <li><b>倾向裁剪不静默发生</b><span>默认关闭；显式配置时报告比例；e=0 直接失败而不是被裁剪掩盖。</span></li>
-        <li><b>协方差非 PSD → 报错</b><span>不做特征值修补、不加 ridge 掩盖；推断门槛不过则阻断并附原因清单。</span></li>
-      </ul>
+      <p class="sub">这个项目一半的性格在"拒绝做什么"。八条红线写在代码、文档、报告与测试里。</p>
+
+      <div class="neq-grid">
+        <div class="neq"><div class="row"><span class="lhs">点估计排序</span><span class="sign">≠</span><span class="rhs">确立的排名</span></div><div class="cap">排名只来自同时区间的覆盖性质</div></div>
+        <div class="neq"><div class="row"><span class="lhs">inconclusive</span><span class="sign">≠</span><span class="rhs">相等的证据</span></div><div class="cap">决策词表里没有 equal / tie</div></div>
+        <div class="neq"><div class="row"><span class="lhs">排第一的频次</span><span class="sign">≠</span><span class="rhs">最优概率</span></div><div class="cap">Bootstrap 频次不携带概率语义</div></div>
+        <div class="neq"><div class="row"><span class="lhs">单项 CI 重叠</span><span class="sign">≠</span><span class="rhs">显著性检验</span></div><div class="cap">两两结论只由 Bonferroni 区间给出</div></div>
+        <div class="neq"><div class="row"><span class="lhs">AUC / 准确率</span><span class="sign">≠</span><span class="rhs">因果证据</span></div><div class="cap">相关屏幕是平衡 · 重叠 · 稳定性</div></div>
+        <div class="neq"><div class="row"><span class="lhs">标签字母序</span><span class="sign">≠</span><span class="rhs">并列打破依据</span></div><div class="cap">并列共享名次并显式标记</div></div>
+        <div class="neq"><div class="row"><span class="lhs">静默裁剪倾向得分</span><span class="sign">≠</span><span class="rhs">允许</span></div><div class="cap">默认关闭；显式配置须报告比例</div></div>
+        <div class="neq"><div class="row"><span class="lhs">修补非 PSD 协方差</span><span class="sign">≠</span><span class="rhs">允许</span></div><div class="cap">报错不修补；门槛不过则阻断并披露</div></div>
+      </div>
     </section>
 
+    <!-- ================= §6 phases ================= -->
     <section id="phases">
       <h2><span class="secno">§6</span>演进路线</h2>
-      <div class="rule"><i></i><s></s><b></b><s></s><i></i></div>
-      <p class="sub">五个阶段按次序实施，每一阶段先通过统计验收再进下一阶段；当前停在 Phase 4。</p>
-      <div class="timeline">
-        <div class="phase"><div class="pn">Phase 0</div><div class="pt">骨架与契约</div><p>包结构、配置校验、真值可复现的 DGP、README 红线声明。</p></div>
-        <div class="phase"><div class="pn">Phase 1</div><div class="pt">估计链路</div><p>GBM 倾向 + Hájek IPTW + 权重 / 重叠 / 平衡诊断与质量门控。首个可用里程碑。</p></div>
-        <div class="phase"><div class="pn">Phase 2</div><div class="pt">联合推断</div><p>重拟合 Bootstrap 协方差、SE / CI、失败披露与推断阻断、SE 校准模拟。</p></div>
-        <div class="phase"><div class="pn">Phase 3</div><div class="pt">排名推断</div><p>Bonferroni 同时区间、可确认优劣、[1+Bᵢ, K−Wᵢ]、并列约定、覆盖率基准。MVP。</p></div>
-        <div class="phase now"><div class="pn">Phase 4 · 当前</div><div class="pt">分发与可视化</div><p>静态 HTML 报告、5 种 SVG 图、CSV→HTML 示例、PyPI Trusted Publishing 发布链路。</p></div>
-      </div>
-      <div class="later">
-        <div class="lt">之后（规格 §6 明确列后、不提前实现）</div>
-        <p>max-T / stepdown 排名推断 · AIPW / 重叠加权（新 estimand）· 灵敏度分析 · 影响函数 / sandwich 对照 · cluster bootstrap · 近似最优集合与 MCB。半成品统计量被误用的风险大于缺功能的风险，因此每一项都以独立验证为前置。</p>
+      <div class="rule"><i></i><s></s><b></b><s></s><i></s></div>
+      <p class="sub">每阶段先通过统计验收再进下一阶段；Later 项以独立验证为前置。</p>
+
+      <div class="scrollx">
+      <svg viewBox="0 0 1120 176" role="img" aria-label="时间轴：Phase 0 到 4 已完成，Phase 4 为当前；之后为待验证的扩展研究">
+        <line x1="40" y1="70" x2="860" y2="70" stroke="#1d4ed8" stroke-width="2"/>
+        <line x1="860" y1="70" x2="1080" y2="70" stroke="#8496a6" stroke-width="2" stroke-dasharray="6 5"/>
+
+        <g text-anchor="middle">
+          <!-- P0 -->
+          <circle cx="140" cy="70" r="7" fill="#1d4ed8"/>
+          <text class="d-title" x="140" y="48">Phase 0</text>
+          <text class="d-note" x="140" y="98">包骨架 · 配置校验</text>
+          <text class="d-note" x="140" y="113">真值 DGP</text>
+          <!-- P1 -->
+          <circle cx="320" cy="70" r="7" fill="#1d4ed8"/>
+          <text class="d-title" x="320" y="48">Phase 1</text>
+          <text class="d-note" x="320" y="98">GBM 倾向 · Hájek</text>
+          <text class="d-note" x="320" y="113">诊断与门控</text>
+          <!-- P2 -->
+          <circle cx="500" cy="70" r="7" fill="#1d4ed8"/>
+          <text class="d-title" x="500" y="48">Phase 2</text>
+          <text class="d-note" x="500" y="98">联合 Bootstrap Σ</text>
+          <text class="d-note" x="500" y="113">SE / CI · 阻断</text>
+          <!-- P3 -->
+          <circle cx="680" cy="70" r="7" fill="#1d4ed8"/>
+          <text class="d-title" x="680" y="48">Phase 3</text>
+          <text class="d-note" x="680" y="98">Bonferroni 区间</text>
+          <text class="d-note" x="680" y="113">排名置信集 · MVP</text>
+          <!-- P4 current -->
+          <circle cx="860" cy="70" r="9" fill="#fff" stroke="#a56808" stroke-width="3"/>
+          <circle cx="860" cy="70" r="3.5" fill="#a56808"/>
+          <text class="d-title" x="860" y="48" fill="#a56808">Phase 4 · 当前</text>
+          <text class="d-note" x="860" y="98">HTML 报告 · 5 图</text>
+          <text class="d-note" x="860" y="113">PyPI 发布链路</text>
+          <!-- later -->
+          <circle cx="965" cy="70" r="6" fill="#fff" stroke="#8496a6" stroke-width="2"/>
+          <text class="d-note" x="965" y="100" fill="#8496a6">max-T / stepdown</text>
+          <circle cx="1055" cy="70" r="6" fill="#fff" stroke="#8496a6" stroke-width="2"/>
+          <text class="d-note" x="1055" y="100" fill="#8496a6">AIPW / OW</text>
+          <text class="d-note" x="1010" y="48" fill="#8496a6">Later · 验证前置</text>
+        </g>
+        <text class="d-note" x="560" y="152" text-anchor="middle" fill="#57697a">Phase 0–4 已完成并通过全部质量门控 · 半成品统计量被误用的风险大于缺功能的风险</text>
+      </svg>
       </div>
     </section>
 
+    <!-- ================= §7 validation ================= -->
     <section id="validation">
       <h2><span class="secno">§7</span>验证与工程</h2>
       <div class="rule"><i></i><s></s><b></b><s></s><i></i></div>
-      <p class="sub">"跑通"不等于正确：手算例锁定公式、不变性测试锁定性质、Monte Carlo 覆盖率锁定推断质量。</p>
+      <p class="sub">手算例锁定公式 · 不变性测试锁定性质 · Monte Carlo 覆盖率锁定推断质量。</p>
 
       <div class="numstrip">
-        <div><div class="n">173</div><div class="l">项测试<br>（167 快 + 6 慢）</div></div>
+        <div><div class="n">185</div><div class="l">项测试<br>（179 快 + 6 慢）</div></div>
         <div><div class="n">23</div><div class="l">个源文件<br>mypy 全量通过</div></div>
         <div><div class="n">8</div><div class="l">个 DGP 场景<br>含已知真值 μ_true</div></div>
         <div><div class="n">4</div><div class="l">个可执行 Notebook<br>CI 每次全量执行</div></div>
-        <div><div class="n">2</div><div class="l">Python 版本<br>3.11 / 3.12 CI 矩阵</div></div>
-        <div><div class="n">0</div><div class="l">新增可视化依赖<br>报告为纯 stdlib SVG</div></div>
+        <div><div class="n">2</div><div class="l">Python 版本<br>3.11 / 3.12 矩阵</div></div>
+        <div><div class="n">0</div><div class="l">新增依赖<br>报告为纯 stdlib SVG</div></div>
       </div>
 
-      <h3>Monte Carlo 校准结果（研究基准实测）</h3>
-      <table class="ledger">
-        <thead><tr><th>指标</th><th>结果</th><th>设定</th></tr></thead>
-        <tbody>
-          <tr><td class="layer">SE 校准 se_ratio</td><td class="duty"><b>0.85 – 1.11</b>：Bootstrap SE 与 μ̂ 真实抽样波动吻合在 ±15% 内，无系统性偏小 / 偏大</td><td class="files">confounded, n=1200<br>R=16, B=100, cf=5</td></tr>
-          <tr><td class="layer">单项 95% CI 覆盖率</td><td class="duty">0.81 – 1.00，MC 标准误 0.08–0.10；最低值距名义 0.95 约 1.4 个 MC se——不据此断言欠覆盖，也不宣称精确覆盖</td><td class="files">同上</td></tr>
-          <tr><td class="layer">混杂 vs 调整</td><td class="duty">调整后 |bias| 0.003–0.015；未调整 0.027–0.072 且<b>不随 n 消失</b>——这是混杂偏差本身</td><td class="files">n=6000, R=20</td></tr>
-          <tr><td class="layer">真并列假确认</td><td class="duty">equal_effects 场景 confirmed=0，排名区间保持全宽；并列感知覆盖率由 <code>run_rank_benchmark</code> 统计</td><td class="files">equal_effects, n=1200</td></tr>
-        </tbody>
-      </table>
-
-      <details class="calc">
-        <summary>手算对照例（实现与独立计算逐位一致，rel 1e-12）</summary>
-        <div class="body">
-          <table class="ledger">
-            <tbody>
-              <tr><td class="layer">Hájek 2×4 样本</td><td class="duty">权重 [1.25, 2.5, 10/7, 2.5]；μ̂_A = 1/3，μ̂_B = 4/11，ESS_A = 3.75²/(1.25²+2.5²) = 1.8</td></tr>
-              <tr><td class="layer">SMD</td><td class="duty">x=[1,3] vs [2,6] → s_ref=√5，未加权 SMD = −2/√5；权重 [1,3]×[1,1] → 加权 SMD = −1.5/√5；类别 level 指示 → SMD = −1.0</td></tr>
-              <tr><td class="layer">K=2 Bonferroni</td><td class="duty">M=1，内核 z_crit 与 norm.ppf(0.975) 一致（&lt;1e-12）；同时区间退化为常规两方案比较</td></tr>
-              <tr><td class="layer">协方差</td><td class="duty">Σ 与 np.cov(draws, rowvar=False, ddof=1) 逐位一致；测试显式断言"未再除以 n"；n_jobs=2 与串行逐位一致</td></tr>
-            </tbody>
-          </table>
+      <div class="charts">
+        <div class="mini">
+          <h4>SE 校准 se_ratio</h4>
+          <div class="cap">平均 Bootstrap SE ÷ μ̂ 真实抽样波动 · 理想 = 1.0</div>
+          <svg viewBox="0 0 460 66" role="img" aria-label="se_ratio 区间 0.85 到 1.11，目标 1.0">
+            <rect x="120" y="18" width="310" height="14" rx="7" fill="#eef2f7"/>
+            <rect x="228" y="18" width="81" height="14" rx="7" fill="#1d4ed8"/>
+            <line x1="275" y1="10" x2="275" y2="40" stroke="#16202b" stroke-dasharray="4 3" stroke-width="1.4"/>
+            <text class="fig-tick" x="275" y="54" text-anchor="middle" fill="#16202b">1.0</text>
+            <text class="fig-tick" x="120" y="54" text-anchor="middle">0.5</text>
+            <text class="fig-tick" x="430" y="54" text-anchor="middle">1.5</text>
+            <text x="268" y="12" text-anchor="end" font-size="11" fill="#1d4ed8" font-family="var(--font-mono)">0.85</text>
+            <text x="315" y="12" font-size="11" fill="#1d4ed8" font-family="var(--font-mono)">1.11</text>
+          </svg>
+          <div class="cap">无系统性偏小 / 偏大 · confounded n=1200 R=16 B=100</div>
         </div>
-      </details>
+
+        <div class="mini">
+          <h4>单项 95% CI 覆盖率</h4>
+          <div class="cap">名义 0.95 · MC 标准误 0.08–0.10（R=16）</div>
+          <svg viewBox="0 0 460 66" role="img" aria-label="覆盖率区间 0.81 到 1.00，名义 0.95">
+            <rect x="120" y="18" width="310" height="14" rx="7" fill="#eef2f7"/>
+            <rect x="234" y="18" width="196" height="14" rx="7" fill="#1d4ed8"/>
+            <line x1="378" y1="10" x2="378" y2="40" stroke="#16202b" stroke-dasharray="4 3" stroke-width="1.4"/>
+            <text class="fig-tick" x="378" y="54" text-anchor="middle" fill="#16202b">0.95</text>
+            <text class="fig-tick" x="120" y="54" text-anchor="middle">0.7</text>
+            <text class="fig-tick" x="430" y="54" text-anchor="middle">1.0</text>
+            <text x="228" y="12" text-anchor="end" font-size="11" fill="#1d4ed8" font-family="var(--font-mono)">0.81</text>
+          </svg>
+          <div class="cap">最低值距名义约 1.4 个 MC se——不断言欠覆盖</div>
+        </div>
+
+        <div class="mini">
+          <h4>混杂偏差 vs 调整后</h4>
+          <div class="cap">|bias| 范围（n=6000, R=20）· 未调整偏差不随 n 消失</div>
+          <svg viewBox="0 0 460 84" role="img" aria-label="未调整偏差 0.027 到 0.072，调整后 0.003 到 0.015">
+            <rect x="120" y="14" width="310" height="8" rx="4" fill="#eef2f7"/>
+            <rect x="225" y="14" width="176" height="8" rx="4" fill="#b3261e" opacity=".8"/>
+            <text class="fig-tick" x="112" y="21" text-anchor="end" fill="#16202b">未调整</text>
+            <rect x="120" y="40" width="310" height="8" rx="4" fill="#eef2f7"/>
+            <rect x="132" y="40" width="47" height="8" rx="4" fill="#1d4ed8"/>
+            <text class="fig-tick" x="112" y="47" text-anchor="end" fill="#16202b">调整后</text>
+            <text x="406" y="10" font-size="10.5" fill="#b3261e" font-family="var(--font-mono)">混杂偏差</text>
+            <text class="fig-tick" x="120" y="68" text-anchor="middle">0</text>
+            <text class="fig-tick" x="275" y="68" text-anchor="middle">0.04</text>
+            <text class="fig-tick" x="430" y="68" text-anchor="middle">0.08</text>
+          </svg>
+          <div class="cap">调整后 |bias| 0.003–0.015 vs 未调整 0.027–0.072</div>
+        </div>
+
+        <div class="mini">
+          <h4>真并列场景</h4>
+          <div class="cap">equal_effects：每个臂的名次区间 = [1, 3]，confirmed = 0</div>
+          <svg viewBox="0 0 460 92" role="img" aria-label="三个臂的排名区间都是全宽 1 到 3，无可确认关系">
+            <text class="fig-lab" x="48" y="20" text-anchor="end">A</text>
+            <rect x="60" y="11" width="370" height="9" rx="4.5" fill="#d5dde6"/>
+            <text class="fig-lab" x="48" y="40" text-anchor="end">B</text>
+            <rect x="60" y="31" width="370" height="9" rx="4.5" fill="#d5dde6"/>
+            <text class="fig-lab" x="48" y="60" text-anchor="end">C</text>
+            <rect x="60" y="51" width="370" height="9" rx="4.5" fill="#d5dde6"/>
+            <line x1="60" y1="72" x2="430" y2="72" stroke="#9aa9b8"/>
+            <text class="fig-tick" x="60" y="86" text-anchor="middle">1</text>
+            <text class="fig-tick" x="245" y="86" text-anchor="middle">2</text>
+            <text class="fig-tick" x="430" y="86" text-anchor="middle">3</text>
+          </svg>
+          <div class="cap">并列感知覆盖率与假确认率由 run_rank_benchmark 统计</div>
+        </div>
+      </div>
 
       <div class="cmds">
         <span class="c"># 全部工程检查</span><br>
-        uv run pytest -q &nbsp;&nbsp;<span class="c"># 173 tests</span><br>
+        uv run pytest -q &nbsp;&nbsp;<span class="c"># 185 tests</span><br>
         uv run ruff check . &nbsp;&amp;&amp;&nbsp; uv run mypy<br>
         uv build<br>
         uv run jupyter nbconvert --to notebook --execute examples/0{1,2,3,4}_*.ipynb<br>
