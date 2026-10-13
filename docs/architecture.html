@@ -114,16 +114,25 @@
   .scrollx { overflow-x: auto; }
   .scrollx svg { display: block; min-width: 880px; width: 100%; height: auto; }
 
+  /* diagram legend + reading guide */
+  .dlegend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12.8px;
+             color: var(--ink-2); margin: 2px 0 10px; }
+  .dlegend b { color: var(--ink); font-weight: 650; }
+  .read { font-size: 13.2px; color: var(--ink-2); line-height: 1.7; margin-top: 10px;
+          border-top: 1px solid var(--hair); padding-top: 9px; max-width: none; }
+  .read b { color: var(--ink); }
+
   /* diagram shared text classes (SVG) */
-  .d-num { font: 600 11px var(--font-mono); fill: var(--blue); }
-  .d-title { font: 650 13.5px var(--font-body); fill: var(--ink); }
-  .d-file { font: 10px var(--font-mono); fill: var(--ink-3); }
-  .d-fx { font: 10.5px var(--font-mono); fill: #35507a; }
-  .d-note { font: 11px var(--font-body); fill: var(--ink-2); }
+  .d-num { font: 600 13px var(--font-mono); fill: var(--blue); }
+  .d-title { font: 650 15px var(--font-body); fill: var(--ink); }
+  .d-file { font: 11.5px var(--font-mono); fill: var(--ink-3); }
+  .d-fx { font: 12px var(--font-mono); fill: #35507a; }
+  .d-note { font: 12.5px var(--font-body); fill: var(--ink-2); }
   .d-box { fill: #fff; stroke: var(--hair); }
-  .d-arrow { stroke: #8fa1b3; stroke-width: 1.6; fill: none; }
-  .d-arrow-r { stroke: #c98d87; stroke-width: 1.4; fill: none; stroke-dasharray: 5 4; }
-  .d-dash { stroke: #8fa1b3; stroke-width: 1.3; fill: none; stroke-dasharray: 4 4; }
+  .d-arrow { stroke: #8fa1b3; stroke-width: 2; fill: none; }
+  .d-arrow-r { stroke: #c98d87; stroke-width: 1.6; fill: none; stroke-dasharray: 5 4; }
+  .d-dash { stroke: #8fa1b3; stroke-width: 1.5; fill: none; stroke-dasharray: 4 4; }
+  .d-mono { font-family: var(--font-mono); }
 
   /* ---------- §2 layer bands ---------- */
   .layers { background: var(--panel); border: 1px solid var(--hair); border-radius: 6px; overflow: hidden; }
@@ -313,7 +322,7 @@
         <rect class="rk-bar r4" x="263" y="242" width="347" height="9" rx="4.5" fill="#d5dde6"/>
         <circle class="rk-dot r4" cx="610" cy="246.5" r="4.5" fill="#64748b"/>
       </svg>
-      <figcaption>示意（结构与 <code>result</code> 对象一致）：A 的区间整体高于 B → 可确认 A 优于 B；C 与 D 分不出 → 排名置信集如实变宽。<strong>区间宽不是算法失败，是诚实答案。</strong></figcaption>
+      <figcaption><b>怎么读：</b>上半部分是四个 Treatment 的点估计（圆点）与置信区间（横线）——A 的整条区间都在 B 上方，说明 A 优于 B 是统计上可确认的；C 和 D 的区间大幅重叠，分不出高下。下半部分把"能不能分出"翻译成排名区间：A 是 [1,2]，C 和 D 是全宽 [2,4]。<strong>区间宽不是算法失败，是诚实答案。</strong></figcaption>
     </figure>
   </div>
 </header>
@@ -338,10 +347,17 @@
     <section id="pipeline">
       <h2><span class="secno">§1</span>端到端数据流</h2>
       <div class="rule"><i></i><s></s><b></b><s></s><i></i></div>
-      <p class="sub">主链 8 站；Bootstrap 对 ②③ 做 B 轮重拟合回环；④→⑤ 之间有成功率门控。</p>
+      <p class="sub">数据从左侧进入，沿主链 8 站推进；两处旁路只读取主链产物，一个门控决定推断是否放行。</p>
+
+      <div class="dlegend">
+        <span><b>▬ 实线箭头</b>：主链数据流</span>
+        <span><b>┄ 虚线</b>：旁路（只读，不改数据）</span>
+        <span><b>⌒ 顶部弧线</b>：Bootstrap 重拟合回环</span>
+        <span><b>◇ 菱形</b>：门控（不通过则阻断）</span>
+      </div>
 
       <div class="scrollx">
-      <svg viewBox="0 0 1120 452" role="img" aria-label="数据流：8 个主链节点、Bootstrap 重拟合回环、成功率门控、诊断与合成验证旁路">
+      <svg viewBox="0 0 1120 460" role="img" aria-label="数据流：8 个主链节点、Bootstrap 重拟合回环、成功率门控、诊断与合成验证旁路">
         <defs>
           <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M0,0 L10,5 L0,10 z" fill="#8fa1b3"/>
@@ -349,109 +365,108 @@
           <marker id="ahr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M0,0 L10,5 L0,10 z" fill="#c98d87"/>
           </marker>
-          <marker id="ahb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M0,0 L10,5 L0,10 z" fill="#8fa1b3"/>
-          </marker>
         </defs>
 
         <!-- bootstrap refit loop (above row 1) -->
-        <path class="d-dash" d="M 944,58 C 944,12 424,12 424,58" marker-end="url(#ahb)"/>
-        <text class="d-note" x="684" y="26" text-anchor="middle">每轮重抽样后重拟合 ② → ③（× B 轮）</text>
+        <path class="d-dash" d="M 944,60 C 944,16 400,16 400,60" marker-end="url(#ah)"/>
+        <text class="d-note" x="672" y="32" text-anchor="middle">Bootstrap 每轮重抽样后重拟合 ② → ③（× B 轮）</text>
 
         <!-- row 1 nodes: 1..4 left→right -->
         <g>
           <rect class="d-box" x="24" y="64" width="208" height="76" rx="6"/>
-          <text class="d-num" x="36" y="82">1</text>
-          <text class="d-title" x="52" y="82">输入契约</text>
-          <text class="d-file" x="36" y="102">validation.py</text>
-          <text class="d-fx" x="36" y="122">schema · 标签规范序 · dtype</text>
+          <text class="d-num" x="38" y="86">1</text>
+          <text class="d-title" x="58" y="86">输入契约</text>
+          <text class="d-file" x="38" y="108">validation.py</text>
+          <text class="d-fx" x="38" y="130">schema · 标签规范序 · dtype</text>
 
           <rect class="d-box" x="296" y="64" width="208" height="76" rx="6"/>
-          <text class="d-num" x="308" y="82">2</text>
-          <text class="d-title" x="324" y="82">倾向得分</text>
-          <text class="d-file" x="308" y="102">propensity.py</text>
-          <text class="d-fx" x="308" y="122">e_a(x) = P(T=a | X)</text>
+          <text class="d-num" x="310" y="86">2</text>
+          <text class="d-title" x="330" y="86">倾向得分</text>
+          <text class="d-file" x="310" y="108">propensity.py</text>
+          <text class="d-fx" x="310" y="130">e_a(x) = P(T=a | X)</text>
 
           <rect class="d-box" x="568" y="64" width="208" height="76" rx="6"/>
-          <text class="d-num" x="580" y="82">3</text>
-          <text class="d-title" x="596" y="82">Hájek IPTW</text>
-          <text class="d-file" x="580" y="102">iptw.py</text>
-          <text class="d-fx" x="580" y="122">w=1/ê_T(X),  μ̂=ΣwY/Σw</text>
+          <text class="d-num" x="582" y="86">3</text>
+          <text class="d-title" x="602" y="86">Hájek IPTW</text>
+          <text class="d-file" x="582" y="108">iptw.py</text>
+          <text class="d-fx" x="582" y="130">w=1/ê_T(X),  μ̂=ΣwY/Σw</text>
 
           <rect class="d-box" x="840" y="64" width="208" height="76" rx="6"/>
-          <text class="d-num" x="852" y="82">4</text>
-          <text class="d-title" x="868" y="82">联合 Bootstrap</text>
-          <text class="d-file" x="852" y="102">bootstrap.py</text>
-          <text class="d-fx" x="852" y="122">Σ̂ = cov(draws, ddof=1)</text>
+          <text class="d-num" x="854" y="86">4</text>
+          <text class="d-title" x="874" y="86">联合 Bootstrap</text>
+          <text class="d-file" x="854" y="108">bootstrap.py</text>
+          <text class="d-fx" x="854" y="130">Σ̂ = cov(draws, ddof=1)</text>
 
-          <line class="d-arrow" x1="236" y1="102" x2="288" y2="102" marker-end="url(#ah)"/>
-          <line class="d-arrow" x1="508" y1="102" x2="560" y2="102" marker-end="url(#ah)"/>
-          <line class="d-arrow" x1="780" y1="102" x2="832" y2="102" marker-end="url(#ah)"/>
+          <line class="d-arrow" x1="236" y1="102" x2="286" y2="102" marker-end="url(#ah)"/>
+          <line class="d-arrow" x1="508" y1="102" x2="558" y2="102" marker-end="url(#ah)"/>
+          <line class="d-arrow" x1="780" y1="102" x2="830" y2="102" marker-end="url(#ah)"/>
+        </g>
+
+        <!-- diagnostics bypass (middle band, below row 1) -->
+        <line class="d-dash" x1="400" y1="142" x2="400" y2="160" marker-end="url(#ah)"/>
+        <path class="d-dash" d="M 672,142 V 206 H 596" marker-end="url(#ah)"/>
+        <rect x="150" y="162" width="440" height="92" rx="8" fill="#f8fafc" stroke="#8fa1b3" stroke-dasharray="5 4"/>
+        <text class="d-title" x="168" y="188">质量诊断（旁路）</text>
+        <text class="d-file" x="168" y="208">diagnostics/  weights · overlap · balance</text>
+        <text class="d-note" x="168" y="228">读取 ② 的倾向得分与 ③ 的权重，输出 ESS · 共同支持 · SMD</text>
+        <g class="d-mono" font-size="10" font-weight="600" text-anchor="middle">
+          <rect x="168" y="238" width="54" height="16" rx="3" fill="#edf6f0" stroke="#b9d9c6"/>
+          <text x="195" y="249" fill="#1e5638">pass</text>
+          <rect x="230" y="238" width="66" height="16" rx="3" fill="#faf2de" stroke="#e6cf96"/>
+          <text x="263" y="249" fill="#6b4405">caution</text>
+          <rect x="304" y="238" width="48" height="16" rx="3" fill="#fbeae7" stroke="#eab8b2"/>
+          <text x="328" y="249" fill="#7d1a14">fail</text>
         </g>
 
         <!-- gate diamond on 4→5 -->
-        <line class="d-arrow" x1="944" y1="142" x2="944" y2="172" marker-end="url(#ah)"/>
-        <polygon points="944,176 972,196 944,216 916,196" fill="#fff" stroke="#b3261e" stroke-width="1.6"/>
-        <text class="d-note" x="944" y="200" text-anchor="middle" fill="#b3261e" font-size="10">门控</text>
-        <text class="d-note" x="906" y="192" text-anchor="end">成功率 ≥90% 且 ≥30 轮?</text>
-        <path class="d-arrow-r" d="M 974,196 L 1032,196" marker-end="url(#ahr)"/>
-        <text class="d-note" x="1038" y="200" fill="#b3261e">阻断 Σ</text>
-        <line class="d-arrow" x1="944" y1="218" x2="944" y2="246" marker-end="url(#ah)"/>
+        <line class="d-arrow" x1="944" y1="142" x2="944" y2="182" marker-end="url(#ah)"/>
+        <polygon points="944,186 972,208 944,230 916,208" fill="#fff" stroke="#b3261e" stroke-width="1.8"/>
+        <text class="d-note" x="944" y="213" text-anchor="middle" fill="#b3261e" font-size="11.5">门控</text>
+        <text class="d-note" x="906" y="204" text-anchor="end">成功率 ≥90% 且 ≥30 轮?</text>
+        <path class="d-arrow-r" d="M 974,208 L 1026,208" marker-end="url(#ahr)"/>
+        <text class="d-note" x="1032" y="212" fill="#b3261e">阻断 Σ</text>
+        <line class="d-arrow" x1="944" y1="232" x2="944" y2="274" marker-end="url(#ah)"/>
 
         <!-- row 2 nodes: 5..8 right→left -->
         <g>
-          <rect class="d-box" x="840" y="250" width="208" height="76" rx="6"/>
-          <text class="d-num" x="852" y="268">5</text>
-          <text class="d-title" x="868" y="268">同时两两区间</text>
-          <text class="d-file" x="852" y="288">pairwise.py</text>
-          <text class="d-fx" x="852" y="308">d̂ ± z₁₋α/(2M)·SE</text>
+          <rect class="d-box" x="840" y="278" width="208" height="76" rx="6"/>
+          <text class="d-num" x="854" y="300">5</text>
+          <text class="d-title" x="874" y="300">同时两两区间</text>
+          <text class="d-file" x="854" y="322">pairwise.py</text>
+          <text class="d-fx" x="854" y="344">d̂ ± z₁₋α/(2M)·SE</text>
 
-          <rect class="d-box" x="568" y="250" width="208" height="76" rx="6"/>
-          <text class="d-num" x="580" y="268">6</text>
-          <text class="d-title" x="596" y="268">排名置信集</text>
-          <text class="d-file" x="580" y="288">ranking.py</text>
-          <text class="d-fx" x="580" y="308">[1 + Bᵢ, K − Wᵢ]</text>
+          <rect class="d-box" x="568" y="278" width="208" height="76" rx="6"/>
+          <text class="d-num" x="582" y="300">6</text>
+          <text class="d-title" x="602" y="300">排名置信集</text>
+          <text class="d-file" x="582" y="322">ranking.py</text>
+          <text class="d-fx" x="582" y="344">[1 + Bᵢ, K − Wᵢ]</text>
 
-          <rect class="d-box" x="296" y="250" width="208" height="76" rx="6"/>
-          <text class="d-num" x="308" y="268">7</text>
-          <text class="d-title" x="324" y="268">结果对象</text>
-          <text class="d-file" x="308" y="288">results.py</text>
-          <text class="d-fx" x="308" y="308">to_dict / to_json</text>
+          <rect class="d-box" x="296" y="278" width="208" height="76" rx="6"/>
+          <text class="d-num" x="310" y="300">7</text>
+          <text class="d-title" x="330" y="300">结果对象</text>
+          <text class="d-file" x="310" y="322">results.py</text>
+          <text class="d-fx" x="310" y="344">to_dict / to_json</text>
 
-          <rect class="d-box" x="24" y="250" width="208" height="76" rx="6"/>
-          <text class="d-num" x="36" y="268">8</text>
-          <text class="d-title" x="52" y="268">静态报告</text>
-          <text class="d-file" x="36" y="288">report.py</text>
-          <text class="d-fx" x="36" y="308">result.to_html(path)</text>
+          <rect class="d-box" x="24" y="278" width="208" height="76" rx="6"/>
+          <text class="d-num" x="38" y="300">8</text>
+          <text class="d-title" x="58" y="300">静态报告</text>
+          <text class="d-file" x="38" y="322">report.py</text>
+          <text class="d-fx" x="38" y="344">result.to_html(path)</text>
 
-          <line class="d-arrow" x1="834" y1="288" x2="784" y2="288" marker-end="url(#ah)"/>
-          <line class="d-arrow" x1="562" y1="288" x2="512" y2="288" marker-end="url(#ah)"/>
-          <line class="d-arrow" x1="290" y1="288" x2="240" y2="288" marker-end="url(#ah)"/>
-        </g>
-
-        <!-- diagnostics bypass (middle band) -->
-        <line class="d-dash" x1="400" y1="142" x2="400" y2="158" marker-end="url(#ah)"/>
-        <path class="d-dash" d="M 672,142 V 186 H 596" marker-end="url(#ah)"/>
-        <rect x="150" y="158" width="440" height="96" rx="8" fill="#f8fafc" stroke="#8fa1b3" stroke-dasharray="5 4"/>
-        <text class="d-title" x="168" y="182">质量诊断（旁路）</text>
-        <text class="d-file" x="168" y="200">diagnostics/  weights · overlap · balance</text>
-        <text class="d-note" x="168" y="220">权重分位 · ESS · 全样本共同支持 · 加权前后 SMD</text>
-        <g font-family="var(--font-mono)" font-size="9.5" font-weight="600" text-anchor="middle">
-          <rect x="168" y="230" width="52" height="16" rx="3" fill="#edf6f0" stroke="#b9d9c6"/>
-          <text x="194" y="241" fill="#1e5638">pass</text>
-          <rect x="228" y="230" width="64" height="16" rx="3" fill="#faf2de" stroke="#e6cf96"/>
-          <text x="260" y="241" fill="#6b4405">caution</text>
-          <rect x="300" y="230" width="46" height="16" rx="3" fill="#fbeae7" stroke="#eab8b2"/>
-          <text x="323" y="241" fill="#7d1a14">fail</text>
+          <line class="d-arrow" x1="832" y1="316" x2="782" y2="316" marker-end="url(#ah)"/>
+          <line class="d-arrow" x1="560" y1="316" x2="510" y2="316" marker-end="url(#ah)"/>
+          <line class="d-arrow" x1="288" y1="316" x2="238" y2="316" marker-end="url(#ah)"/>
         </g>
 
         <!-- simulation strip -->
-        <rect x="24" y="368" width="1024" height="56" rx="8" fill="#f8fafc" stroke="#8fa1b3" stroke-dasharray="6 4"/>
-        <text class="d-title" x="536" y="392" text-anchor="middle">合成验证（旁路）· simulation/</text>
-        <text class="d-note" x="536" y="410" text-anchor="middle">8 个已知真值场景 + Monte Carlo 基准 — 覆盖率 · se_ratio · 假确认率，对照全链路输出</text>
-        <line class="d-dash" x1="536" y1="368" x2="536" y2="334" marker-end="url(#ah)"/>
+        <rect x="24" y="392" width="1024" height="56" rx="8" fill="#f8fafc" stroke="#8fa1b3" stroke-dasharray="6 4"/>
+        <text class="d-title" x="536" y="416" text-anchor="middle">合成验证（旁路）· simulation/</text>
+        <text class="d-note" x="536" y="436" text-anchor="middle">8 个已知真值场景 + Monte Carlo 基准 — 覆盖率 · se_ratio · 假确认率，对照全链路输出</text>
+        <line class="d-dash" x1="536" y1="392" x2="536" y2="362" marker-end="url(#ah)"/>
       </svg>
       </div>
+
+      <p class="read"><b>怎么读：</b>从 ① 输入契约开始，② 用 GBM 估计每种 Treatment 的概率，③ 把概率倒数当权重算均值，④ 用 Bootstrap 量化以上两步的不确定性得到协方差 Σ，⑤⑥ 从 Σ 出发做多重校正的两两比较和排名区间，⑦ 汇总为结果对象，⑧ 生成可分发的 HTML 报告。<b>两个关键旁路</b>：诊断框不改数据、只读取 ②③ 的产物给出质量门控；底部合成验证用已知真值反复检验整条链路的统计正确性。<b>一个门控</b>：④ 的 Bootstrap 成功率不达标时，⑤⑥ 直接不计算——宁可没有结论，也不给可疑的 Σ。</p>
     </section>
 
     <!-- ================= §2 modules ================= -->
@@ -724,6 +739,8 @@ M = K(K−1)/2</div>
         <text class="d-note" x="560" y="152" text-anchor="middle" fill="#57697a">Phase 0–4 已完成并通过全部质量门控 · 半成品统计量被误用的风险大于缺功能的风险</text>
       </svg>
       </div>
+
+      <p class="read"><b>怎么读：</b>实心蓝点 = 已完成阶段，琥珀色双环 = 当前阶段（Phase 4），空心灰点 = 之后的研究扩展（虚线段）。每个阶段的验收标准是"统计正确性通过测试"而非"功能跑通"——所以进度慢，但每一步都有手算例和模拟覆盖率背书。</p>
     </section>
 
     <!-- ================= §7 validation ================= -->
@@ -752,8 +769,8 @@ M = K(K−1)/2</div>
             <text class="fig-tick" x="275" y="54" text-anchor="middle" fill="#16202b">1.0</text>
             <text class="fig-tick" x="120" y="54" text-anchor="middle">0.5</text>
             <text class="fig-tick" x="430" y="54" text-anchor="middle">1.5</text>
-            <text x="268" y="12" text-anchor="end" font-size="11" fill="#1d4ed8" font-family="var(--font-mono)">0.85</text>
-            <text x="315" y="12" font-size="11" fill="#1d4ed8" font-family="var(--font-mono)">1.11</text>
+            <text x="268" y="12" text-anchor="end" font-size="11" fill="#1d4ed8" class="d-mono">0.85</text>
+            <text x="315" y="12" font-size="11" fill="#1d4ed8" class="d-mono">1.11</text>
           </svg>
           <div class="cap">无系统性偏小 / 偏大 · confounded n=1200 R=16 B=100</div>
         </div>
@@ -768,7 +785,7 @@ M = K(K−1)/2</div>
             <text class="fig-tick" x="378" y="54" text-anchor="middle" fill="#16202b">0.95</text>
             <text class="fig-tick" x="120" y="54" text-anchor="middle">0.7</text>
             <text class="fig-tick" x="430" y="54" text-anchor="middle">1.0</text>
-            <text x="228" y="12" text-anchor="end" font-size="11" fill="#1d4ed8" font-family="var(--font-mono)">0.81</text>
+            <text x="228" y="12" text-anchor="end" font-size="11" fill="#1d4ed8" class="d-mono">0.81</text>
           </svg>
           <div class="cap">最低值距名义约 1.4 个 MC se——不断言欠覆盖</div>
         </div>
@@ -783,7 +800,7 @@ M = K(K−1)/2</div>
             <rect x="120" y="40" width="310" height="8" rx="4" fill="#eef2f7"/>
             <rect x="132" y="40" width="47" height="8" rx="4" fill="#1d4ed8"/>
             <text class="fig-tick" x="112" y="47" text-anchor="end" fill="#16202b">调整后</text>
-            <text x="406" y="10" font-size="10.5" fill="#b3261e" font-family="var(--font-mono)">混杂偏差</text>
+            <text x="406" y="10" font-size="10.5" fill="#b3261e" class="d-mono">混杂偏差</text>
             <text class="fig-tick" x="120" y="68" text-anchor="middle">0</text>
             <text class="fig-tick" x="275" y="68" text-anchor="middle">0.04</text>
             <text class="fig-tick" x="430" y="68" text-anchor="middle">0.08</text>
@@ -809,6 +826,8 @@ M = K(K−1)/2</div>
           <div class="cap">并列感知覆盖率与假确认率由 run_rank_benchmark 统计</div>
         </div>
       </div>
+
+      <p class="read"><b>怎么读这四张图：</b>每张图的<b>蓝色横条 = 实测区间</b>，<b>黑色虚线 = 理想目标值</b>。① SE 校准：蓝条横跨 1.0 说明 Bootstrap 给出的标准误没有系统性偏大或偏小；② 覆盖率：蓝条右端到 1.0、左端 0.81，虚线 0.95 落在蓝条内，且 R=16 时的 MC 噪声（±0.08–0.10）足以解释偏离；③ 红条（未调整偏差）远长于蓝条（调整后），且红条不经过原点——这就是"混杂偏差不随样本量消失"的直观形态；④ 真并列场景：三个臂的排名区间都是全宽 [1,3]，噪声没有制造出假的确定排名。</p>
 
       <div class="cmds">
         <span class="c"># 全部工程检查</span><br>
