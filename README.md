@@ -60,18 +60,18 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  IN(["原始 DataFrame"]) --> V["① 输入契约<br/><i>validation.py</i><br/>schema · 标签规范序 · dtype"]
-  V --> P["② 倾向得分<br/><i>propensity.py</i><br/>e_a(x)=P(T=a|X)"]
-  P --> I["③ Hájek IPTW<br/><i>iptw.py</i><br/>w=1/ê, μ̂=ΣwY/Σw"]
-  I --> B["④ 联合 Bootstrap<br/><i>bootstrap.py</i><br/>Σ̂=cov(draws)"]
-  B -->|"门控通过"| PA["⑤ 同时两两区间<br/><i>pairwise.py</i><br/>d̂ ± z₁₋α/(2M)·SE"]
-  PA --> R["⑥ 排名置信集<br/><i>ranking.py</i><br/>[1+Bᵢ, K−Wᵢ]"]
-  R --> RES["⑦ 结果对象<br/><i>results.py</i>"]
-  RES --> H["⑧ 静态报告<br/><i>report.py</i>"]
+  IN(["你的数据"]) --> V["① 数据校验<br/>字段 / 标签 / 缺失检查"]
+  V --> P["② 倾向得分<br/>估计每种 Treatment 的概率"]
+  P --> I["③ 效应估计<br/>Hájek IPTW 加权均值"]
+  I --> B["④ 不确定性量化<br/>联合 Bootstrap 协方差"]
+  B -->|"门控通过"| PA["⑤ 同时比较<br/>多重校正的两两区间"]
+  PA --> R["⑥ 排名置信集<br/>每个 Treatment 的可能名次"]
+  R --> RES["⑦ 结果对象<br/>数值 + 诊断 + 元数据"]
+  RES --> H["⑧ 可分发报告<br/>自包含 HTML"]
 
-  P -.-> DG["质量诊断（旁路）<br/><i>diagnostics/</i><br/>权重 · ESS · 重叠 · SMD"]
+  P -.-> DG["质量诊断（旁路）<br/>权重 · ESS · 重叠 · 平衡"]
   I -.-> DG
-  SIM["合成验证（旁路）<br/><i>simulation/</i><br/>8 场景 + Monte Carlo"] -.-> IN
+  SIM["合成验证（旁路）<br/>8 个已知真值场景"] -.-> IN
 
   classDef gate fill:#fff,stroke:#b3261e,stroke-width:2px,color:#b3261e
   classDef bypass fill:#f8fafc,stroke:#8fa1b3,stroke-dasharray:5 4
@@ -203,16 +203,15 @@ ranking = rank_from_estimates(
 
 ## 估计方法（一句话版）
 
-- **倾向得分**：`e_a(x) = P(T=a|X=x)`，由**联合多分类** GBM（scikit-learn
-  `HistGradientBoostingClassifier`）估计；预处理（缺失插补、one-hot）全部包在 Pipeline 内、
-  只在训练折内 fit，避免信息泄露。
-- **估计器**：Hájek IPTW，`w_i = 1 / e_{T_i}(X_i)`，
-  `μ̂ₐ = Σ_{Tᵢ=a} wᵢ Yᵢ / Σ_{Tᵢ=a} wᵢ`，所有 Treatment 在**同一目标总体**上比较。
-- **不确定性**：对同一索引重抽样、每轮**重跑全部拟合协议**，得到 `B×K` 估计，
-  由 `np.cov(draws, ddof=1)` 得联合协方差 `Σ`（**不再除以 n**）。
-- **推断**：Bonferroni 同时两两区间 → 可确认优劣关系 → 保守排名置信集 `[1+Bᵢ, K−Wᵢ]`。
+- **倾向得分**：用多分类梯度提升（GBM）估计每个个体接受各 Treatment 的概率；
+  预处理与模型包成一条流水线，在数据折内拟合以避免信息泄露。
+- **效应估计**：Hájek IPTW，把倾向得分的倒数当权重、在组内归一化后加权平均，
+  所有 Treatment 在**同一目标总体**上比较。
+- **不确定性**：对同一份样本做联合 Bootstrap，每轮重新拟合全部流程，
+  得到各 Treatment 估计的联合协方差（不低估）。
+- **推断**：Bonferroni 校正的同时两两区间 → 可确认优劣关系 → 保守排名置信集。
 
-完整定义、公式、适用条件与数值边界见 [`docs/methodology.md`](docs/methodology.md) 与
+完整公式、适用条件与数值边界见 [`docs/methodology.md`](docs/methodology.md) 与
 [`docs/assumptions.md`](docs/assumptions.md)。
 
 ## 诊断与 17 个警告码
@@ -324,23 +323,19 @@ flowchart TD
 
 ---
 
-## 项目结构
+## 从哪入手
 
-```text
-src/causalrank/        包源码
-  api.py · config.py · validation.py · results.py
-  estimators/          倾向得分（GBM）+ Hájek IPTW
-  diagnostics/         overlap · weights · balance
-  inference/           联合 Bootstrap · 同时区间 · 排名置信集
-  simulation/          已知真值 DGP + Monte Carlo 基准
-  visualization/       静态 HTML 报告与内联 SVG 图
-tests/                 185 项 pytest 测试（13 个测试文件）
-examples/              4 个可执行示例 Notebook
-docs/                  方法、假设、模拟协议、API、架构可视化
-```
-
-技术架构的可视化讲解见 [`docs/architecture.html`](docs/architecture.html)（数据流、模块分层、
-17 个警告码、校准结果）。API 参考见 [`docs/api.md`](docs/api.md)。
+- **想直接跑起来**：装好包后照 [Quickstart](#快速开始) 五分钟出结果；
+- **想看完整实例**：4 个可执行 Notebook，从原始数据一路到 HTML 报告——
+  [`01_gbm_iptw_from_raw_data`](examples/01_gbm_iptw_from_raw_data.ipynb) ·
+  [`02_joint_bootstrap`](examples/02_joint_bootstrap.ipynb) ·
+  [`03_causal_ranking`](examples/03_causal_ranking.ipynb) ·
+  [`04_html_report`](examples/04_html_report.ipynb)；
+- **想知道方法是否可信**：[`docs/methodology.md`](docs/methodology.md) 给出全部公式与适用条件，
+  [`docs/simulation_protocol.md`](docs/simulation_protocol.md) 给出已知真值下的覆盖率验证；
+- **想看技术架构**：[`docs/architecture.html`](docs/architecture.html) 是一份可视化讲解
+  （数据流、质量门控、17 个警告码、校准结果）；
+- **要接入程序**：[`docs/api.md`](docs/api.md) 是完整 API 参考。
 
 ## 许可证
 
